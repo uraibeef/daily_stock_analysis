@@ -143,7 +143,7 @@ package 的 `metadata` 会过滤疑似敏感键，例如 token、secret、passwo
 - 若结构化检测提示外部模型/API 或运行时配置迁移风险，PR 描述需明确该提示来自既有静态检测规则覆盖新增通知配置项，不代表本轮改动模型名、provider、Base URL、LLM 路由、`.env` 持久化迁移或旧配置清理语义。
 - PR 描述需写明仓库内依据：通知链路边界以本文档、`docs/full-guide*.md`、`requirements.txt` 中 LiteLLM 依赖窗口，以及 `tests/test_notification_diagnostics.py`、`tests/test_feishu_doc.py` 的回归覆盖为准。
 - 回退方式：回退本次 PR 即可恢复旧行为；如要逐项回退可清理 `NOTIFICATION_*`、`MARKDOWN_TO_IMAGE_CHANNELS` 等新增配置项，不需要执行模型/API 配置迁移。
-- PR 描述需补充实际验证结果：`./scripts/ci_gate.sh`、`python main.py --check-notify`；必要时再补充 `python -m pytest -m "not network" tests/test_notification_diagnostics.py tests/test_feishu_doc.py`。
+- PR 描述需补充实际验证结果：`./scripts/ci_gate.sh`、`python main.py --check-notify`；必要时再补充 `python -m py_compile src/feishu_doc.py src/schemas/report_delivery.py src/services/notification_diagnostics.py` 与 `python -m pytest -m "not network" tests/test_notification_diagnostics.py tests/test_feishu_doc.py`。
 
 ## CLI 诊断
 

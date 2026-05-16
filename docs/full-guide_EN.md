@@ -765,7 +765,7 @@ If no reachable Web base URL or history record is available, DSA should not gene
   - If structured validation reports external model/API or migration risks, the PR description should state that this is an existing static rule matching newly introduced notification keys; it does not imply runtime model/provider/Base URL, LLM routing, `.env` persistence migration, or legacy config cleanup behavior changed in this PR.
   - Official references: <https://docs.litellm.ai/docs/providers/openai_compatible>, <https://platform.openai.com/docs/api-reference/chat/create>
   - Dependency window: `litellm>=1.80.10,!=1.82.7,!=1.82.8,<2.0.0` in `requirements.txt`
-  - PR descriptions should record actual verification results for `./scripts/ci_gate.sh`, `python main.py --check-notify`, `tests/test_notification_diagnostics.py`, and `tests/test_feishu_doc.py` (optional full static check: `python -m pytest -m "not network" tests/test_notification_diagnostics.py tests/test_feishu_doc.py`).
+  - PR descriptions should record actual verification results for `./scripts/ci_gate.sh`, `python main.py --check-notify` ; optionally add `python -m py_compile src/feishu_doc.py src/schemas/report_delivery.py src/services/notification_diagnostics.py` and `python -m pytest -m "not network" tests/test_notification_diagnostics.py tests/test_feishu_doc.py`.
 
 ### Discord
 
