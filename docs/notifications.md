@@ -4,7 +4,7 @@
 
 此文档属于 `#1311` umbrella issue 的分阶段落地内容。该链路 PR 说明必须使用 `Refs #1311` 保持可追踪，不得使用 `Closes`、`Fixes` 或 `Resolves` 搭配 `#1311` 等自动关闭写法，避免单个阶段性 PR 误关闭主 issue。
 
-> 本轮对应审阅反馈要求：若当前 PR 描述已写 `Closes #1311`，请按规则改为 `Refs #1311`，并在 Description 中补充本轮实际执行的 `backend-gate`、`docker-build` 与 `python main.py --check-notify` 结果（或在文档记录尚未补充的本地 `./scripts/ci_gate.sh` 结果）。
+> 本轮对应审阅反馈要求：PR 描述必须使用 `Refs #1311`，不得用 `Closes` / `Fixes` / `Resolves` 触发 umbrella 自动关闭，并补充本轮实际执行的 `backend-gate`、`docker-build` 与 `python main.py --check-notify` 结果；若 PR 文本未同步，请在文档记录本地 `./scripts/ci_gate.sh` 结果。
 
 ## 渠道基线
 
@@ -138,6 +138,7 @@ package 的 `metadata` 会过滤疑似敏感键，例如 token、secret、passwo
 - 单一渠道的渲染失败、云文档失败或转图失败，应回退到现有文本 / 分片路径，不影响其他渠道和主分析流程。
 - 飞书云文档链接入口需保留文本可访问性：优先保持 Markdown 链接原文（含 URL），若转换路径降级，应退化为 `文案 (URL)` 形式；`FEISHU_WEBHOOK_URL`、`MARKDOWN_TO_IMAGE_CHANNELS` 等普通配置文本也不应被误认为 Markdown 语法而被删除。
 - 外部模型/API 与运行时语义边界不变：本专题不改模型名、provider、Base URL、LLM 配置清理或迁移逻辑。若结构化检测命中“模型/API 迁移风险”，通常是现有规则在新增通知配置项下的静态扫描结果，非本轮引入运行时行为变更；兼容核验与回退路径见完整指南中的说明，并以 `tests/test_notification_diagnostics.py`、`tests/test_feishu_doc.py` 为回归入口。
+- 配置键保真是回归验收点：`FEISHU_WEBHOOK_URL`、`FEISHU_APP_SECRET` 等含下划线 key 不应被清洗掉下划线或转换为无分隔符文本。
 
 ### PR 描述补充清单（#1311）
 

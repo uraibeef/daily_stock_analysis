@@ -757,6 +757,8 @@ Recommended combinations:
 
 If no reachable Web base URL or history record is available, DSA should not generate a misleading full-report link. If Feishu document creation or image rendering fails, delivery falls back to the existing text / chunked message path. Run `python main.py --check-notify` to see the recommended delivery shape and image-rendering dependency diagnostics for configured channels.
 
+For Feishu and WeCom delivery entries, keep link references human-readable: retain Markdown links when supported, or degrade to `text (URL)` if necessary. Plain configuration keys like `FEISHU_WEBHOOK_URL`, `FEISHU_APP_SECRET`, and `MARKDOWN_TO_IMAGE_CHANNELS` must remain literal and must not be rewritten by underscore-stripping or other markdown cleanup.
+
 ### Compatibility and issue-tracking note (notification rollout)
 
 - This scope is part of the `#1311` umbrella split (P0-P7). PR titles and descriptions must link phase work with `Refs #1311`, and must not combine `Closes`, `Fixes`, or `Resolves` with `#1311` for a single phase PR.
@@ -767,7 +769,7 @@ If no reachable Web base URL or history record is available, DSA should not gene
   - Regression tests: `tests/test_analysis_api_contract.py`, `tests/test_analysis_history.py`, `tests/test_market_review.py`, `tests/test_notification_diagnostics.py`, `tests/test_feishu_doc.py`
   - If structured validation reports external model/API or migration risks, the PR description should state that this is an existing static rule matching newly introduced notification keys; it does not imply runtime model/provider/Base URL, LLM routing, `.env` persistence migration, or legacy config cleanup behavior changed in this PR.
   - Official references: <https://docs.litellm.ai/docs/providers/openai_compatible>, <https://platform.openai.com/docs/api-reference/chat/create>
-- PR descriptions should record actual verification results: do not list only `git diff --check`; they must explicitly include the current CI `backend-gate` and `docker-build` run first, and if not already in the PR append local `./scripts/ci_gate.sh` results; at minimum include `python main.py --check-notify`, and optionally add `python -m py_compile src/feishu_doc.py src/schemas/report_delivery.py src/services/notification_diagnostics.py` and `python -m pytest -m "not network" tests/test_notification_diagnostics.py tests/test_feishu_doc.py`.
+- PR descriptions should record actual verification results: do not list only `git diff --check`; they must explicitly include the current CI `backend-gate` and `docker-build` outcomes, and if not already in the PR append local `./scripts/ci_gate.sh` results. At minimum include `python main.py --check-notify`; optionally add `python -m py_compile src/feishu_doc.py src/schemas/report_delivery.py src/services/notification_diagnostics.py` and `python -m pytest -m "not network" tests/test_notification_diagnostics.py tests/test_feishu_doc.py`.
 - PR descriptions should also state that `summary_markdown` is covered in the delivery payload contract; if this round does not touch runtime, mark that `tests/test_report_delivery_package.py` follow-up verification is deferred to a later phase PR.
 
 ### Discord

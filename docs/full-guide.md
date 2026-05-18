@@ -945,6 +945,8 @@ PUSHOVER_API_TOKEN=your_api_token
 
 未配置可访问的 Web base URL 或拿不到历史报告记录时，系统不应生成误导性的完整报告链接；飞书云文档或图片快照创建失败时，会回退现有文本 / 分片推送路径。可通过 `python main.py --check-notify` 查看当前渠道的推荐投递形态和转图依赖诊断。
 
+飞书/企业微信入口文本要优先保留 Markdown 可访问性：链接建议保留原文（含 URL）或降级为 `文案 (URL)` 形式；`FEISHU_WEBHOOK_URL`、`FEISHU_APP_SECRET`、`MARKDOWN_TO_IMAGE_CHANNELS` 等普通配置键应以原样文本展示，不能被清理为无下划线变体。
+
 ### 兼容性与 issue 跟踪说明（通知投递迭代）
 
 - 本节改动为 `#1311` 的分阶段计划（P0-P7）治理片段之一，PR 标题与描述必须以 `Refs #1311` 跟踪，避免使用 `Closes`、`Fixes` 或 `Resolves` 搭配 `#1311` 让单次 PR 关闭 umbrella issue。
@@ -954,7 +956,7 @@ PUSHOVER_API_TOKEN=your_api_token
   - `requirements.txt` 中 `litellm>=1.80.10,!=1.82.7,!=1.82.8,<2.0.0`
   - 回归用例：`tests/test_analysis_api_contract.py`、`tests/test_analysis_history.py`、`tests/test_market_review.py`、`tests/test_notification_diagnostics.py`、`tests/test_feishu_doc.py`
   - 官方来源：<https://docs.litellm.ai/docs/providers/openai_compatible>、<https://platform.openai.com/docs/api-reference/chat/create>
-- PR 描述需记录实际验证结果：不得仅保留 `git diff --check`；必须先写入本次 CI 的 `backend-gate` 与 `docker-build` 结论；若未同步，请补充 `./scripts/ci_gate.sh` 执行结果；此外至少附上 `python main.py --check-notify`，必要时再补充 `python -m py_compile src/feishu_doc.py src/schemas/report_delivery.py src/services/notification_diagnostics.py`，以及 `python -m pytest -m "not network" tests/test_notification_diagnostics.py tests/test_feishu_doc.py`。
+- PR 描述需记录实际验证结果：不得仅保留 `git diff --check`；必须写入本次 CI 的 `backend-gate` 与 `docker-build` 结论；若未同步到 PR，需补充本地 `./scripts/ci_gate.sh` 执行结果；此外至少附上 `python main.py --check-notify`。必要时可补充 `python -m py_compile src/feishu_doc.py src/schemas/report_delivery.py src/services/notification_diagnostics.py`，以及 `python -m pytest -m "not network" tests/test_notification_diagnostics.py tests/test_feishu_doc.py`。
 - PR 描述还应声明 `summary_markdown` 字段已覆盖投递载荷契约；如本轮不触及运行时代码，请标注后续 P 阶段跟进 `tests/test_report_delivery_package.py` 的契约完整性核验。
 
 ---

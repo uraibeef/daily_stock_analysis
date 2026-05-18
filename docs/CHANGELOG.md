@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [文档] 补齐 `docs/notifications.md` 与 `docs/full-guide*.md` 中的通知能力基线、渠道能力矩阵和 PR 描述交付清单（含 `backend-gate`、`docker-build`、`./scripts/ci_gate.sh`、`python main.py --check-notify`、`tests/test_notification_diagnostics.py` 与 `tests/test_feishu_doc.py`）。
 - [文档] 细化 `#1311` 阶段性 PR 交付要求：PR 描述需显式记录 `backend-gate` / `docker-build` 结果与 `python main.py --check-notify` 输出，并将 `外部模型/API`、`迁移语义` 静态扫描命中标注为既有规则覆盖，不等同于本轮运行时模型/provider/Base URL 行为变更。
 - [文档] 在 `#1311` 治理文档体系中补充 `summary_markdown` 投递载荷字段的一致性说明，并要求 `tests/test_report_delivery_package.py` 作为后续/同期开关的契约回归点之一。
+- [文档] 明确飞书/企业微信投递边界：保留 Markdown 链接可达性（支持原文或 `文案 (URL)` 降级），并要求配置键（含下划线）在飞书文档 Markdown 清洗中保持字面文本，以避免静态配置被误删。
 - [文档] 明确报告投递体验边界：IM/Push 渠道以摘要+入口为主、完整研报优先 `report_url` / `external_doc_url` / HTML，避免敏感链接和完整正文误入默认通道。
 
 ## [3.17.1] - 2026-05-16
