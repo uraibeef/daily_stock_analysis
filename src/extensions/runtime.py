@@ -101,6 +101,8 @@ class ExtensionRuntime:
         action_context.input_hash = action_context.input_hash or input_hash(payload)
         if action.timeout_seconds and "timeout_seconds" not in action_context.budget:
             action_context.budget["timeout_seconds"] = action.timeout_seconds
+        for key, value in action.budget_hints.items():
+            action_context.budget_hints.setdefault(key, value)
 
         self._record_started(action, action_context, created_at)
 
@@ -188,8 +190,22 @@ class ExtensionRuntime:
             self._record_finished(result)
             return result
 
+        release_on_exit = True
+
+        def _release_after_timeout(future) -> None:
+            nonlocal release_on_exit
+            release_on_exit = False
+            future.add_done_callback(
+                lambda _future: self.concurrency_guard.release(action, decision.dedupe_key)
+            )
+
         try:
-            result = self._call_handler(action.handler, action_context, action.timeout_seconds)
+            result = self._call_handler(
+                action.handler,
+                action_context,
+                action.timeout_seconds,
+                on_running_timeout=_release_after_timeout,
+            )
             if isinstance(result, ActionResult):
                 result.run_id = run_id
                 result.action_id = action_id
@@ -230,9 +246,16 @@ class ExtensionRuntime:
             self._record_finished(result)
             return result
         finally:
-            self.concurrency_guard.release(action, decision.dedupe_key)
+            if release_on_exit:
+                self.concurrency_guard.release(action, decision.dedupe_key)
 
-    def _call_handler(self, handler, context: ActionContext, timeout_seconds: Optional[float]) -> Any:
+    def _call_handler(
+        self,
+        handler,
+        context: ActionContext,
+        timeout_seconds: Optional[float],
+        on_running_timeout=None,
+    ) -> Any:
         if timeout_seconds is None or timeout_seconds <= 0:
             return handler(context)
 
@@ -241,7 +264,8 @@ class ExtensionRuntime:
         try:
             return future.result(timeout=timeout_seconds)
         except concurrent.futures.TimeoutError as exc:
-            future.cancel()
+            if not future.cancel() and on_running_timeout is not None:
+                on_running_timeout(future)
             raise TimeoutError() from exc
         finally:
             executor.shutdown(wait=False, cancel_futures=True)

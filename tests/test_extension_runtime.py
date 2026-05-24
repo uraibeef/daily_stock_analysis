@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 from types import SimpleNamespace
 
@@ -321,6 +322,69 @@ def test_runtime_timeout_returns_structured_error():
 
     assert result.status == ExtensionStatus.FAILED.value
     assert result.error_code == ExtensionErrorCode.TIMEOUT.value
+
+
+def test_runtime_keeps_dedupe_slot_until_timed_out_handler_finishes():
+    started = threading.Event()
+    finish = threading.Event()
+
+    def _handler(_context: ActionContext):
+        started.set()
+        finish.wait(timeout=1)
+        return {"late": True}
+
+    action = _echo_action(handler=_handler, timeout_seconds=0.01)
+    runtime = ExtensionRuntime(ExtensionCatalog([action]))
+    context = ActionContext(
+        action_id="test.echo",
+        input={"message": "hello"},
+        idempotency_key="same-request",
+    )
+
+    first = runtime.execute("test.echo", {"message": "hello"}, context=context)
+    assert started.is_set()
+
+    try:
+        retry = runtime.execute(
+            "test.echo",
+            {"message": "hello"},
+            context=ActionContext(
+                action_id="test.echo",
+                input={"message": "hello"},
+                idempotency_key="same-request",
+            ),
+        )
+
+        assert first.status == ExtensionStatus.FAILED.value
+        assert first.error_code == ExtensionErrorCode.TIMEOUT.value
+        assert retry.status == ExtensionStatus.FAILED.value
+        assert retry.error_code == ExtensionErrorCode.IDEMPOTENCY_CONFLICT.value
+    finally:
+        finish.set()
+
+
+def test_runtime_applies_action_budget_hints_to_context_defaults():
+    observed = []
+
+    def _handler(context: ActionContext):
+        observed.append(dict(context.budget_hints))
+        return {"ok": True}
+
+    action = _echo_action(
+        handler=_handler,
+        budget_hints={"max_items": 5, "max_tokens": 100},
+    )
+    runtime = ExtensionRuntime(ExtensionCatalog([action]))
+    context = ActionContext(
+        action_id="test.echo",
+        input={"message": "hello"},
+        budget_hints={"max_items": 2},
+    )
+
+    result = runtime.execute("test.echo", {"message": "hello"}, context=context)
+
+    assert result.status == ExtensionStatus.COMPLETED.value
+    assert observed == [{"max_items": 2, "max_tokens": 100}]
 
 
 def test_runtime_idempotency_key_dedupe_conflict():
