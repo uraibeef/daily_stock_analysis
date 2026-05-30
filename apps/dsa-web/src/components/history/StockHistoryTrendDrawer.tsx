@@ -23,9 +23,9 @@ interface StockHistoryTrendDrawerProps {
 }
 
 const RANGE_OPTIONS: Array<{ value: StockHistoryRange; label: string }> = [
-  { value: 'all', label: '全部历史' },
   { value: '30d', label: '近30天' },
   { value: '90d', label: '近90天' },
+  { value: 'all', label: '全部' },
 ];
 
 const isPresent = <T,>(value: T | null | undefined): value is T =>
@@ -42,7 +42,14 @@ const formatChangePct = (value?: number): string => {
   return `${sign}${value.toFixed(2)}%`;
 };
 
-const formatAdvice = (item: HistoryItem): string => {
+const getPriceChangeStyle = (value?: number): React.CSSProperties | undefined => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value === 0) {
+    return undefined;
+  }
+  return { color: value > 0 ? 'var(--home-price-up)' : 'var(--home-price-down)' };
+};
+
+const formatAdvice = (item: Pick<HistoryItem, 'operationAdvice' | 'trendPrediction'>): string => {
   const advice = item.operationAdvice?.trim();
   const trend = item.trendPrediction?.trim();
   if (advice && trend) {
@@ -56,22 +63,18 @@ const summarizeView = (items: HistoryItem[], currentId?: number) => {
     .map((item) => item.sentimentScore)
     .filter((score): score is number => typeof score === 'number' && Number.isFinite(score));
   const current = items.find((item) => item.id === currentId) || items[0];
-  const latestScore = current?.sentimentScore;
   const averageScore = scores.length
     ? scores.reduce((sum, score) => sum + score, 0) / scores.length
     : undefined;
-  const scoreTrail = scores.slice(0, 6).reverse();
+  const scoreTrail = scores.slice(0, 8).reverse();
   const models = new Map<string, number>();
   items.forEach((item) => {
-    const model = item.modelUsed?.trim();
-    if (model) {
-      models.set(model, (models.get(model) || 0) + 1);
-    }
+    const model = item.modelUsed?.trim() || '未记录';
+    models.set(model, (models.get(model) || 0) + 1);
   });
 
   return {
     current,
-    latestScore,
     averageScore,
     scoreTrail,
     modelSummary: Array.from(models.entries())
@@ -81,6 +84,15 @@ const summarizeView = (items: HistoryItem[], currentId?: number) => {
       .join(' / '),
   };
 };
+
+const MetricItem: React.FC<{ label: string; value: React.ReactNode; title?: string }> = ({ label, value, title }) => (
+  <div className="min-w-0 rounded-lg border border-border/60 bg-background/50 px-3 py-2">
+    <p className="text-xs text-muted-text">{label}</p>
+    <p className="mt-1 truncate text-sm font-semibold text-foreground" title={title}>
+      {value}
+    </p>
+  </div>
+);
 
 export const StockHistoryTrendDrawer: React.FC<StockHistoryTrendDrawerProps> = ({
   report,
@@ -100,14 +112,12 @@ export const StockHistoryTrendDrawer: React.FC<StockHistoryTrendDrawerProps> = (
   const currentRecordId = report.meta.id;
   const stockLabel = `${report.meta.stockName || report.meta.stockCode} ${report.meta.stockCode}`;
   const summary = useMemo(() => summarizeView(items, currentRecordId), [currentRecordId, items]);
-  const currentModel = report.meta.modelUsed || summary.current?.modelUsed || '--';
-  const currentAdvice = summary.current
-    ? formatAdvice(summary.current)
+  const currentItem = summary.current;
+  const currentScore = currentItem?.sentimentScore ?? report.summary.sentimentScore;
+  const currentModel = report.meta.modelUsed || currentItem?.modelUsed || '--';
+  const currentAdvice = currentItem
+    ? formatAdvice(currentItem)
     : formatAdvice({
-        id: 0,
-        queryId: report.meta.queryId,
-        stockCode: report.meta.stockCode,
-        createdAt: report.meta.createdAt,
         operationAdvice: report.summary.operationAdvice,
         trendPrediction: report.summary.trendPrediction,
       });
@@ -117,52 +127,36 @@ export const StockHistoryTrendDrawer: React.FC<StockHistoryTrendDrawerProps> = (
       isOpen
       onClose={onClose}
       title="同股历史趋势"
-      width="max-w-3xl"
+      titleEyebrow="历史分析"
+      width="max-w-2xl"
       zIndex={90}
-      backdropClassName="bg-background/50 backdrop-blur-[2px]"
+      backdropClassName="bg-background/48 backdrop-blur-[2px]"
     >
       <div className="space-y-4">
-        <section className="rounded-2xl border border-border/70 bg-card/90 p-4 shadow-soft-card">
+        <section className="rounded-xl border border-border/70 bg-background/35 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.18em] text-secondary-text">
-                Stock Timeline
-              </p>
-              <h3 className="mt-1 text-xl font-semibold text-foreground">{stockLabel}</h3>
+            <div className="min-w-0">
+              <h3 className="truncate text-lg font-semibold text-foreground">{stockLabel}</h3>
               <p className="mt-1 text-sm text-secondary-text">
                 共 {total || items.length} 次分析 · 最近 {formatDateTime(items[0]?.createdAt || report.meta.createdAt)}
               </p>
             </div>
-            <Badge variant="info" size="sm" className="shadow-none">
+            <Badge variant="info" size="sm" className="shrink-0 shadow-none">
               当前 {currentAdvice}
             </Badge>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border border-border/60 bg-background/70 p-3">
-              <p className="text-xs text-secondary-text">当前分数</p>
-              <p className="mt-1 font-mono text-2xl font-semibold text-foreground">
-                {formatNumber(summary.latestScore, 0)}
-              </p>
-            </div>
-            <div className="rounded-xl border border-border/60 bg-background/70 p-3">
-              <p className="text-xs text-secondary-text">平均分</p>
-              <p className="mt-1 font-mono text-2xl font-semibold text-foreground">
-                {formatNumber(summary.averageScore, 1)}
-              </p>
-            </div>
-            <div className="rounded-xl border border-border/60 bg-background/70 p-3">
-              <p className="text-xs text-secondary-text">当前模型</p>
-              <p className="mt-1 truncate text-sm font-semibold text-foreground" title={currentModel}>
-                {currentModel}
-              </p>
-            </div>
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <MetricItem label="当前分数" value={formatNumber(currentScore, 0)} />
+            <MetricItem label="平均分" value={formatNumber(summary.averageScore, 1)} />
+            <MetricItem label="当前价格" value={formatNumber(currentItem?.currentPrice, 2)} />
+            <MetricItem label="当前模型" value={currentModel} title={currentModel} />
           </div>
 
           {summary.scoreTrail.length >= 2 ? (
-            <div className="mt-4 rounded-xl border border-border/60 bg-background/70 p-3">
+            <div className="mt-4 rounded-lg border border-border/60 bg-card/50 px-3 py-2.5">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs text-secondary-text">分数走势</span>
+                <span className="text-xs text-secondary-text">评分变化</span>
                 {summary.scoreTrail.map((score, index) => (
                   <span key={`${score}-${index}`} className="flex items-center gap-2">
                     {index > 0 && <span className="text-muted-text">→</span>}
@@ -180,17 +174,19 @@ export const StockHistoryTrendDrawer: React.FC<StockHistoryTrendDrawerProps> = (
                 ))}
               </div>
               {summary.modelSummary ? (
-                <p className="mt-2 text-xs text-secondary-text">模型分布：{summary.modelSummary}</p>
+                <p className="mt-2 truncate text-xs text-secondary-text" title={summary.modelSummary}>
+                  模型记录：{summary.modelSummary}
+                </p>
               ) : null}
             </div>
           ) : (
-            <p className="mt-4 rounded-xl border border-dashed border-border/70 bg-background/60 px-3 py-2 text-sm text-secondary-text">
-              当前历史记录不足，暂无法形成趋势。
+            <p className="mt-4 rounded-lg border border-dashed border-border/70 bg-card/45 px-3 py-2 text-sm text-secondary-text">
+              当前历史记录不足，暂无法形成连续趋势。
             </p>
           )}
         </section>
 
-        <section className="rounded-2xl border border-border/70 bg-card/90 p-4 shadow-soft-card">
+        <section className="rounded-xl border border-border/70 bg-background/35 p-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               {RANGE_OPTIONS.map((option) => (
@@ -198,20 +194,17 @@ export const StockHistoryTrendDrawer: React.FC<StockHistoryTrendDrawerProps> = (
                   key={option.value}
                   type="button"
                   onClick={() => onRangeChange(option.value)}
-                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
                     filters.range === option.value
                       ? 'border-primary/50 bg-primary/10 text-primary'
-                      : 'border-border/70 bg-background/70 text-secondary-text hover:bg-hover hover:text-foreground'
+                      : 'border-border/70 bg-card/55 text-secondary-text hover:bg-hover hover:text-foreground'
                   }`}
                 >
                   {option.label}
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-2 text-xs text-secondary-text">
-              <span>模型：全部</span>
-              <span>最新优先</span>
-            </div>
+            <p className="text-xs text-secondary-text">按分析时间倒序</p>
           </div>
         </section>
 
@@ -235,80 +228,91 @@ export const StockHistoryTrendDrawer: React.FC<StockHistoryTrendDrawerProps> = (
             description="完成多次分析后，这里会展示观点变化、评分走势和模型记录。"
           />
         ) : (
-          <section className="space-y-3">
-            {items.map((item) => {
-              const isCurrent = item.id === currentRecordId;
-              const sentimentColor = isPresent(item.sentimentScore)
-                ? getSentimentColor(item.sentimentScore)
-                : undefined;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => onSelectRecord(item.id)}
-                  className={`w-full rounded-2xl border p-4 text-left shadow-soft-card transition-colors ${
-                    isCurrent
-                      ? 'border-primary/45 bg-primary/10'
-                      : 'border-border/70 bg-card/90 hover:border-primary/30 hover:bg-hover/60'
-                  }`}
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-xs text-secondary-text">
-                          {formatDateTime(item.createdAt)}
-                        </span>
-                        {isCurrent && (
+          <section className="rounded-xl border border-border/70 bg-background/35">
+            <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+              <h4 className="text-sm font-semibold text-foreground">历史记录</h4>
+              <span className="text-xs text-secondary-text">
+                已加载 {items.length} / {total || items.length} 条
+              </span>
+            </div>
+
+            <div className="divide-y divide-border/55">
+              {items.map((item) => {
+                const isCurrent = item.id === currentRecordId;
+                const sentimentColor = isPresent(item.sentimentScore)
+                  ? getSentimentColor(item.sentimentScore)
+                  : undefined;
+                const scoreStyle = sentimentColor
+                  ? {
+                      color: sentimentColor,
+                      borderColor: `${sentimentColor}40`,
+                      backgroundColor: `${sentimentColor}12`,
+                    }
+                  : undefined;
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => onSelectRecord(item.id)}
+                    className={`grid w-full grid-cols-1 gap-3 px-4 py-3 text-left transition-colors sm:grid-cols-[8.5rem_minmax(0,1fr)_7.5rem] ${
+                      isCurrent ? 'bg-primary/8' : 'hover:bg-hover/55'
+                    }`}
+                  >
+                    <div className="space-y-1">
+                      <p className="font-mono text-xs text-secondary-text">{formatDateTime(item.createdAt)}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {isCurrent ? (
                           <Badge variant="info" size="sm" className="shadow-none">
                             当前
                           </Badge>
-                        )}
-                        {item.reportType && (
+                        ) : null}
+                        {item.reportType ? (
                           <Badge variant="default" size="sm" className="shadow-none">
                             {formatReportType(item.reportType)}
                           </Badge>
-                        )}
+                        ) : null}
                       </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-semibold text-foreground">{formatAdvice(item)}</span>
-                        {isPresent(item.sentimentScore) && sentimentColor && (
+                        {isPresent(item.sentimentScore) ? (
                           <span
                             className="rounded-full border px-2 py-0.5 font-mono text-xs font-semibold"
-                            style={{
-                              color: sentimentColor,
-                              borderColor: `${sentimentColor}40`,
-                              backgroundColor: `${sentimentColor}12`,
-                            }}
+                            style={scoreStyle}
                           >
                             {item.sentimentScore}
                           </span>
-                        )}
-                        <span className="font-mono text-xs text-secondary-text">
+                        ) : null}
+                        <span
+                          className="font-mono text-xs text-secondary-text"
+                          style={getPriceChangeStyle(item.changePct)}
+                        >
                           {formatChangePct(item.changePct)}
                         </span>
                       </div>
-                      <p className="mt-2 line-clamp-2 text-sm leading-6 text-secondary-text">
+                      <p className="mt-1 line-clamp-2 text-sm leading-6 text-secondary-text">
                         {item.analysisSummary || '暂无分析摘要'}
                       </p>
                     </div>
-                    <div className="w-full shrink-0 text-left sm:w-44 sm:text-right">
-                      <p className="truncate text-xs font-medium text-foreground" title={item.modelUsed || undefined}>
-                        {item.modelUsed || '--'}
+
+                    <div className="min-w-0 text-left sm:text-right">
+                      <p className="truncate text-xs text-secondary-text" title={item.modelUsed || '未记录模型'}>
+                        {item.modelUsed || '未记录模型'}
                       </p>
                       <p className="mt-1 font-mono text-xs text-secondary-text">
                         价格 {formatNumber(item.currentPrice, 2)}
                       </p>
                     </div>
-                  </div>
-                </button>
-              );
-            })}
+                  </button>
+                );
+              })}
+            </div>
 
-            <div className="flex flex-col items-center gap-2 pt-2">
-              <p className="text-xs text-secondary-text">
-                已加载 {items.length} / {total || items.length} 条
-              </p>
-              {hasMore && (
+            {hasMore ? (
+              <div className="flex justify-center border-t border-border/60 px-4 py-3">
                 <Button
                   variant="secondary"
                   size="sm"
@@ -318,8 +322,8 @@ export const StockHistoryTrendDrawer: React.FC<StockHistoryTrendDrawerProps> = (
                 >
                   加载更多
                 </Button>
-              )}
-            </div>
+              </div>
+            ) : null}
           </section>
         )}
       </div>
