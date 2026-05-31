@@ -37,21 +37,9 @@
 
 ## 报告渲染与分片
 
-通知报告默认仍沿用现有发送入口和可见版式，不默认改成 summary-only，也不改变现有渠道路由、降噪或图片 opt-in 语义。#1311 当前只做技术底座：补齐渠道能力画像、保留 legacy text fallback，并改善长消息分片的边界处理。
+当前默认推送报告的入口、内容来源和整体版式保持不变。本阶段只收敛通知渲染的技术路线：沉淀渠道能力画像、发送前消息结构和结构感知分片能力，避免后续按渠道扩展时继续在各 sender 中堆叠平行逻辑。
 
-企业微信仍走既有仪表盘文本，飞书、Telegram、Slack 仍使用聚合 Markdown 报告作为默认文本来源；当前不会自动切换到“决策卡片”或其他新 IM 版式。未来如启用平台专用 renderer，应先提供显式开关、样式对比和真实推送截图，再替换默认输出。
-
-渠道能力画像由 `src/notification_capabilities.py` 维护，包含 Markdown 类型、单条长度限制、card/image/file/link 支持情况和默认投递策略。发送前结果可用 `PreparedMessage` 表达，但现有发送器仍保留文本 fallback。`CHANNEL_RENDERER_PRESETS` 仅记录企业微信、飞书、Telegram、钉钉、Slack 的未来 renderer 预设，所有 preset 默认 `enabled_by_default=False`，当前运行时不读取这些 preset 改变报告内容。
-
-当前已接入的报告格式化规则：
-
-- 飞书：继续使用 interactive card + `lark_md`，标题转加粗、引用和分隔线降级，pipe table 转移动端可读 key-value 行；长报告使用结构感知分片，避免切坏代码块、行内代码和链接。
-- 企业微信：保持现有 markdown/text payload 和既有仪表盘摘要入口；pipe table 转移动端可读 key-value 行，超长消息分片切换为结构感知分片。
-- Telegram：继续使用 Bot API 文本消息和 plain-text fallback，报告先转 Telegram 可接受的 Markdown，表格转 key-value 行，并按 UTF-16 code units 分片。
-- Slack：发送前转 mrkdwn，标准 Markdown 链接转 `<url|text>`，表格转 key-value 行，Block Kit section 拆分不切断 Markdown 边界。
-- Email：仍作为完整 HTML 高保真载体，不受 IM 渠道格式化策略降级。
-
-Web report URL、飞书云文档和图片快照仍是可选增强；未配置可访问 Web base URL 时不生成 report URL。
+这些能力默认不替换现有报告样式，也不改变通知路由、降噪、图片 opt-in 或 Email HTML 输出。后续如需为企业微信、飞书、Telegram、Slack 等渠道接入专用 renderer，应通过显式配置、真实发送验证和回归测试逐步启用。
 
 ## GitHub Actions 映射
 
