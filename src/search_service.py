@@ -2224,6 +2224,11 @@ class SearchService:
         r"(?:^|[^a-z0-9])(?:yue|vx|qq|wechat|weixin)[-_]?\d{3,}(?:[^a-z0-9]|$)",
         re.IGNORECASE,
     )
+    _ADULT_SERVICE_SPAM_CONTACT_CONTEXT_TERMS = (
+        "小姐", "上门", "预约", "同城", "按摩", "保健", "足浴", "桑拿",
+        "会所", "技师", "全套", "套餐", "包夜", "大保健", "推油",
+        "约炮", "援交", "成人", "色情",
+    )
 
     def __init__(
         self,
@@ -2800,6 +2805,7 @@ class SearchService:
                 has_file_size
                 or has_download_intent
                 or (has_download_action and has_app_metadata)
+                or (has_app_metadata and has_rating)
             )
         )
 
@@ -2821,7 +2827,11 @@ class SearchService:
             cls._ADULT_SERVICE_SPAM_STRONG_TERMS,
         ):
             return True
-        if cls._ADULT_SERVICE_SPAM_CONTACT_RE.search(combined_text):
+        has_contact_signal = bool(cls._ADULT_SERVICE_SPAM_CONTACT_RE.search(combined_text))
+        if has_contact_signal and cls._contains_any_news_term(
+            combined_text,
+            cls._ADULT_SERVICE_SPAM_CONTACT_CONTEXT_TERMS,
+        ):
             return True
 
         if (

@@ -742,6 +742,36 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
         )
         self.assertEqual(resp.results[0].relevance_category, "direct_company_news")
 
+    def test_url_backed_app_rating_listing_is_filtered(self) -> None:
+        """App-store URL plus version/rating metrics should be treated as listing noise."""
+        fresh = datetime.now().date().isoformat()
+        service, _ = self._create_service_with_mock_provider(
+            news_max_age_days=3,
+            news_strategy_profile="short",
+            response=_response(
+                [
+                    _result(
+                        "腾讯控股 00700 app store rating",
+                        fresh,
+                        snippet="4.8 stars, 10M downloads, version 12.8 for mobile app users.",
+                        url="https://apps.example.invalid/tencent/00700",
+                        source="apps.example.invalid",
+                    ),
+                    _result(
+                        "腾讯控股 00700 发布回购公告",
+                        fresh,
+                        snippet="腾讯控股披露股份回购公告。",
+                        url="https://finance.example.invalid/news/00700-buyback",
+                        source="finance.example.invalid",
+                    ),
+                ]
+            ),
+        )
+
+        resp = service.search_stock_news("00700.HK", "腾讯控股", max_results=1)
+
+        self.assertEqual([item.title for item in resp.results], ["腾讯控股 00700 发布回购公告"])
+
     def test_finance_client_boilerplate_does_not_trigger_download_filter(self) -> None:
         """Finance media boilerplate such as 客户端讯 should not look like an app page."""
         fresh = datetime.now().date().isoformat()
@@ -817,6 +847,33 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
         self.assertEqual(
             [item.title for item in resp.results],
             ["华能国际 600011 推出全套服务解决方案"],
+        )
+        self.assertEqual(resp.results[0].relevance_category, "direct_company_news")
+
+    def test_contact_like_product_token_does_not_trigger_adult_spam_filter(self) -> None:
+        """Product/version identifiers such as QQ2024 need adult context before filtering."""
+        fresh = datetime.now().date().isoformat()
+        service, _ = self._create_service_with_mock_provider(
+            news_max_age_days=3,
+            news_strategy_profile="short",
+            response=_response(
+                [
+                    _result(
+                        "腾讯控股 00700 发布 QQ2024 新功能",
+                        fresh,
+                        snippet="QQ2024 产品升级，企业通信功能增强。",
+                        url="https://finance.example.invalid/products/QQ2024",
+                        source="finance.example.invalid",
+                    )
+                ]
+            ),
+        )
+
+        resp = service.search_stock_news("00700.HK", "腾讯控股", max_results=1)
+
+        self.assertEqual(
+            [item.title for item in resp.results],
+            ["腾讯控股 00700 发布 QQ2024 新功能"],
         )
         self.assertEqual(resp.results[0].relevance_category, "direct_company_news")
 
