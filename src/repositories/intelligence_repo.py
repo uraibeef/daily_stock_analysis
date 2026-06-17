@@ -96,8 +96,22 @@ class IntelligenceRepository:
                 title = (fields.get("title") or "").strip()
                 if not url or not title:
                     continue
+                source_id = fields.get("source_id")
+                scope_type = fields.get("scope_type")
+                scope_value = fields.get("scope_value")
+                market = fields.get("market")
+                conditions = [
+                    IntelligenceItem.url == url,
+                    IntelligenceItem.source_id == source_id,
+                    IntelligenceItem.scope_type == scope_type,
+                    IntelligenceItem.market == market,
+                ]
+                if scope_value is None:
+                    conditions.append(IntelligenceItem.scope_value.is_(None))
+                else:
+                    conditions.append(IntelligenceItem.scope_value == scope_value)
                 existing = session.execute(
-                    select(IntelligenceItem).where(IntelligenceItem.url == url).limit(1)
+                    select(IntelligenceItem).where(and_(*conditions)).limit(1)
                 ).scalar_one_or_none()
                 if existing is not None:
                     existing.summary = fields.get("summary") or existing.summary

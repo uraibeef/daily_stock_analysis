@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import os
+import socket
 import tempfile
 import unittest
 from datetime import datetime, timedelta
+from urllib.parse import quote
 from unittest.mock import Mock, patch
 
 from src.config import Config
@@ -15,6 +17,7 @@ from src.services.intelligence_service import IntelligenceService, IntelligenceS
 from src.storage import DatabaseManager, IntelligenceItem
 
 RSS_FIXTURE = b'<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel>\n<item><title>Policy support lifts AI supply chain</title><link>https://news.example.com/a</link><description>Market-level catalyst with evidence link.</description><pubDate>Wed, 17 Jun 2026 08:00:00 GMT</pubDate></item>\n<item><title>Second item</title><link>https://news.example.com/b</link><description>Second summary.</description></item>\n</channel></rss>'
+NO_URL_LINK_FIXTURE = b'<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel>\n<item><title>Anonymous item</title><description>No link in this item.</description></item>\n</channel></rss>'
 
 
 class IntelligenceServiceTestCase(unittest.TestCase):
@@ -27,6 +30,32 @@ class IntelligenceServiceTestCase(unittest.TestCase):
         Config._instance = None
         DatabaseManager.reset_instance()
         self.service = IntelligenceService()
+        self._dns_patcher = patch(
+            "src.services.intelligence_service.socket.getaddrinfo",
+            side_effect=self._mock_getaddrinfo,
+        )
+        self._dns_patcher.start()
+        self.addCleanup(self._dns_patcher.stop)
+
+    def _mock_getaddrinfo(self, host, *_args, **_kwargs):
+        host = (host or "").lower().strip()
+        if host in {"localhost", "localhost.localdomain"}:
+            return [
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 0)),
+            ]
+        return [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0)),
+        ]
+
+    def _feed_fixture(self, source_url: str) -> bytes:
+        key = quote(source_url.replace("://", "_").replace("/", "_"))
+        return RSS_FIXTURE.replace(
+            b"https://news.example.com/a",
+            f"https://news.example.com/{key}.a".encode("utf-8"),
+        ).replace(
+            b"https://news.example.com/b",
+            f"https://news.example.com/{key}.b".encode("utf-8"),
+        )
 
     def tearDown(self) -> None:
         DatabaseManager.reset_instance()
@@ -35,11 +64,21 @@ class IntelligenceServiceTestCase(unittest.TestCase):
             os.environ.pop(key, None)
         self._temp_dir.cleanup()
 
-    def _mock_response(self):
+    def _mock_response(self, source_url: str = "https://feeds.example.com/rss.xml"):
         response = Mock()
-        response.content = RSS_FIXTURE
-        response.url = "https://feeds.example.com/rss.xml"
+        response.status_code = 200
+        response.url = source_url
+        response.headers = {}
         response.raise_for_status.return_value = None
+        response.iter_content.return_value = [self._feed_fixture(source_url)]
+        return response
+
+    def _mock_response_with_redirects(self, source_url: str = "https://feeds.example.com/rss.xml", next_url: str = "https://feeds.example.com/rss.xml"):
+        response = Mock()
+        response.url = source_url
+        response.raise_for_status.return_value = None
+        response.headers = {"Location": next_url}
+        response.status_code = 302
         return response
 
     def test_create_fetch_and_deduplicate_rss_source(self) -> None:
@@ -77,8 +116,121 @@ class IntelligenceServiceTestCase(unittest.TestCase):
         failures = [item for item in result["results"] if not item["ok"]]
         self.assertEqual(len(failures), 1)
         self.assertEqual(failures[0]["source_id"], bad["id"])
-        self.assertIn("token=***", failures[0]["error"])
+        self.assertNotIn("token=secret", failures[0]["error"])
         self.assertNotIn("secret", failures[0]["error"])
+
+    def test_fetch_enabled_sources_paginates_all_enabled_sources(self) -> None:
+        for index in range(150):
+            self.service.create_source({
+                "name": f"feed-{index}",
+                "url": "https://feeds.example.com/rss.xml",
+                "scope_type": "market",
+                "market": "cn",
+            })
+
+        with patch("src.services.intelligence_service.requests.get", side_effect=lambda *_args, **_kwargs: self._mock_response()):
+            result = self.service.fetch_enabled_sources()
+
+        self.assertEqual(result["source_count"], 150)
+        self.assertEqual(len(result["results"]), 150)
+        self.assertEqual(result["saved_count"], 300)
+        self.assertTrue(all(item["ok"] for item in result["results"]))
+
+    def test_fetch_entry_redacts_no_url_link_with_placeholder(self) -> None:
+        source = self.service.create_source({
+            "name": "market-no-link",
+            "url": "https://feeds.example.com/rss.xml",
+            "scope_type": "market",
+        })
+
+        response = Mock()
+        response.status_code = 200
+        response.url = "https://feeds.example.com/rss.xml"
+        response.headers = {}
+        response.raise_for_status.return_value = None
+        response.iter_content.return_value = [NO_URL_LINK_FIXTURE]
+
+        with patch("src.services.intelligence_service.requests.get", return_value=response):
+            result = self.service.fetch_source(source["id"])
+
+        self.assertEqual(result["fetched_count"], 1)
+        self.assertEqual(result["saved_count"], 1)
+        self.assertIn("no-url:intel:", result["sample_items"][0]["url"])
+
+    def test_same_url_can_be_saved_for_different_scopes(self) -> None:
+        market = self.service.create_source({
+            "name": "market-feed",
+            "url": "https://feeds.example.com/shared.xml",
+            "scope_type": "market",
+            "market": "cn",
+        })
+        symbol = self.service.create_source({
+            "name": "symbol-feed",
+            "url": "https://feeds.example.com/shared.xml",
+            "scope_type": "symbol",
+            "scope_value": "600519",
+            "market": "cn",
+        })
+        response = self._mock_response(source_url="https://feeds.example.com/shared.xml")
+        with patch("src.services.intelligence_service.requests.get", return_value=response):
+            market_result = self.service.fetch_source(market["id"])
+            symbol_result = self.service.fetch_source(symbol["id"])
+
+        self.assertEqual(market_result["saved_count"], 2)
+        self.assertEqual(symbol_result["saved_count"], 2)
+        rows, total = IntelligenceRepository().list_items()
+        self.assertEqual(total, 4)
+        scope_pairs = {(row.scope_type, row.scope_value) for row in rows}
+        self.assertIn(("market", None), scope_pairs)
+        self.assertIn(("symbol", "600519"), scope_pairs)
+
+    def test_redirect_to_private_network_is_blocked(self) -> None:
+        source = self.service.create_source({
+            "name": "redirected-feed",
+            "url": "https://feeds.example.com/rss.xml",
+            "scope_type": "market",
+        })
+
+        with patch("src.services.intelligence_service.requests.get", side_effect=[
+            self._mock_response_with_redirects(source_url="https://feeds.example.com/rss.xml", next_url="http://localhost/evil.xml"),
+            self._mock_response(source_url="http://localhost/evil.xml"),
+        ]):
+            with self.assertRaises(IntelligenceServiceError):
+                self.service.fetch_source(source["id"])
+
+    def test_redirect_is_followed_after_dns_validation(self) -> None:
+        source = self.service.create_source({
+            "name": "follow-redirect-feed",
+            "url": "https://feeds.example.com/rss.xml",
+            "scope_type": "market",
+        })
+
+        with patch("src.services.intelligence_service.requests.get", side_effect=[
+            self._mock_response_with_redirects(source_url="https://feeds.example.com/rss.xml", next_url="/next.xml"),
+            self._mock_response(source_url="https://feeds.example.com/next.xml"),
+        ]):
+            result = self.service.fetch_source(source["id"])
+
+        self.assertEqual(result["fetched_count"], 2)
+        self.assertEqual(result["saved_count"], 2)
+
+    def test_feed_response_size_limit_is_enforced(self) -> None:
+        source = self.service.create_source({
+            "name": "large-feed",
+            "url": "https://feeds.example.com/rss.xml",
+            "scope_type": "market",
+        })
+
+        large_response = Mock()
+        large_response.status_code = 200
+        large_response.url = "https://feeds.example.com/rss.xml"
+        large_response.headers = {}
+        large_response.raise_for_status.return_value = None
+        large_response.iter_content.return_value = [b"x" * (2 * 1024 * 1024 + 1)]
+
+        with patch("src.services.intelligence_service.requests.get", return_value=large_response):
+            with self.assertRaises(IntelligenceServiceError):
+                self.service.fetch_source(source["id"])
 
     def test_retention_removes_old_items(self) -> None:
         repo = IntelligenceRepository()

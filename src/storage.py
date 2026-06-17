@@ -35,6 +35,7 @@ from sqlalchemy import (
     Index,
     UniqueConstraint,
     Text,
+    text,
     select,
     and_,
     or_,
@@ -43,6 +44,7 @@ from sqlalchemy import (
     event,
     func,
     inspect,
+    MetaData,
 )
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import (
@@ -246,7 +248,7 @@ class IntelligenceItem(Base):
     source_type = Column(String(32), nullable=False, default='rss', index=True)
     title = Column(String(300), nullable=False)
     summary = Column(Text)
-    url = Column(String(1000), nullable=False, unique=True)
+    url = Column(String(1000), nullable=False)
     source = Column(String(100))
     published_at = Column(DateTime, index=True)
     fetched_at = Column(DateTime, default=datetime.now, index=True)
@@ -256,6 +258,14 @@ class IntelligenceItem(Base):
     raw_payload = Column(Text)
 
     __table_args__ = (
+        UniqueConstraint(
+            "source_id",
+            "scope_type",
+            "scope_value",
+            "market",
+            "url",
+            name="uix_intel_item_scope",
+        ),
         Index('ix_intel_item_scope_time', 'scope_type', 'scope_value', 'market', 'published_at'),
         Index('ix_intel_item_fetch_time', 'fetched_at'),
     )
@@ -1066,6 +1076,7 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
             Base.metadata.create_all(self._engine)
             self._ensure_llm_usage_telemetry_columns()
             self._ensure_schema_migration_record()
+            self._ensure_intelligence_items_unique_index()
 
             self._initialized = True
             logger.info(f"数据库初始化完成: {db_url}")
@@ -1109,6 +1120,102 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
             raise
         finally:
             session.close()
+
+    def _ensure_intelligence_items_unique_index(self) -> None:
+        if not self._is_sqlite_engine:
+            return
+
+        if not inspect(self._engine).has_table("intelligence_items"):
+            return
+
+        try:
+            unique_indexes = self._list_sqlite_unique_indexes("intelligence_items")
+        except Exception as exc:
+            logger.warning(
+                "[Intelligence items] failed to inspect unique indexes; "
+                "skip migration/repair: %s",
+                exc,
+            )
+            return
+
+        target_columns = ("source_id", "scope_type", "scope_value", "market", "url")
+        has_target_index = any(tuple(cols) == target_columns for cols in unique_indexes)
+        has_legacy_url_unique = any(tuple(cols) == ("url",) for cols in unique_indexes)
+
+        if has_target_index:
+            return
+        if unique_indexes and not has_legacy_url_unique:
+            # Table has other unique index shapes; avoid aggressive changes and add
+            # the expected scoped uniqueness directly.
+            self._ensure_intelligence_items_scoped_unique_index_once()
+            return
+
+        self._rebuild_intelligence_items_table()
+
+    def _rebuild_intelligence_items_table(self) -> None:
+        temporary_table = "intelligence_items_recreate_tmp"
+        columns = [column.name for column in IntelligenceItem.__table__.columns]
+        select_clause = ", ".join(f'"{column}"' for column in columns)
+
+        tmp_metadata = MetaData()
+        tmp_table = IntelligenceItem.__table__.to_metadata(
+            tmp_metadata,
+            name=temporary_table,
+        )
+        logger.info("Rebuilding intelligence_items table to align composite uniqueness constraints.")
+        with self._engine.begin() as connection:
+            connection.execute(text(f'DROP TABLE IF EXISTS "{temporary_table}"'))
+            tmp_table.create(connection)
+            connection.execute(
+                text(
+                    f"INSERT INTO \"{temporary_table}\" ({select_clause}) "
+                    f"SELECT {select_clause} FROM intelligence_items"
+                )
+            )
+            connection.execute(text('DROP TABLE "intelligence_items"'))
+            connection.execute(
+                text(f'ALTER TABLE "{temporary_table}" RENAME TO intelligence_items')
+            )
+
+    def _ensure_intelligence_items_scoped_unique_index_once(self) -> None:
+        target_index_name = "uix_intel_item_scope"
+        with self._engine.begin() as connection:
+            rows = connection.execute(
+                text("PRAGMA index_list(intelligence_items)")
+            ).fetchall()
+            for row in rows:
+                if row[1] == target_index_name:
+                    return
+            index_columns = ", ".join(["source_id", "scope_type", "scope_value", "market", "url"])
+            connection.execute(
+                text(
+                    f"CREATE UNIQUE INDEX IF NOT EXISTS {target_index_name} ON "
+                    f"intelligence_items ({index_columns})"
+                )
+            )
+
+    def _list_sqlite_unique_indexes(self, table_name: str):
+        with self._engine.connect() as connection:
+            rows = connection.execute(
+                text(f"PRAGMA index_list({table_name})")
+            ).fetchall()
+            unique_indexes = []
+            for row in rows:
+                # row: (seq, name, unique, origin, partial)
+                if int(row[2]) != 1:
+                    continue
+                index_name = row[1]
+                index_columns = []
+                for index_info in connection.execute(
+                    text(f"PRAGMA index_xinfo({index_name})")
+                ).fetchall():
+                    # index_xinfo: (seqno, cid, name, desc, coll, key, ... )
+                    column_name = index_info[2]
+                    if column_name is None:
+                        continue
+                    index_columns.append(column_name)
+                unique_indexes.append(index_columns)
+            return unique_indexes
 
     def _ensure_llm_usage_telemetry_columns(self) -> None:
         """Add nullable P0a usage telemetry columns to existing SQLite DBs."""
