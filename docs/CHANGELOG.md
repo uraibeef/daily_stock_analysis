@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [改进] #1707 补齐内置 RSS/Atom 资讯源模板后端入口，修复本地资讯拉取的 requests 参数兼容、请求阶段 DNS 校验、共享地址段拒绝、坏条目跳过与港股短代码匹配。
 - [文档] #1707 阐明情报池接入仅追加本地资讯消费，不改模型名/provider/base URL/默认模型策略/回退策略/保存前清理逻辑或运行时配置迁移；结构化风险提示若出现为关键词误报；回滚可采用 `revert` 本 PR 或停用/移除本地资讯接入入口与数据。
 - [文档] 本次 #1707 情报源基线仅新增 `NEWS_INTEL_*` 配置，不变更 LITELLM / ANSPIRE / Base URL / provider/model 清理与回退语义；回退策略为移除或禁用这三项情报源变量后恢复既有 LLM 配置行为。
+- [修复] #1707 默认禁用 `/api/v1/intelligence/sources/defaults` 新建源（未传 `enabled`），避免公开示例 NewsNow 实例被默认启用，同时统一 500 响应细节仅入日志、响应返回通用错误信息。
 
 - [新功能] 个股分析历史成功保存后会从最终报告 best-effort 提取 `DecisionSignal` 决策信号，复用现有信号去重、计划质量计算和脱敏契约。
 - [改进] 问股页移动端策略选择改为默认收起的按钮入口，展开后仍可多选策略并在发送后自动收起，减少对对话内容的遮挡。

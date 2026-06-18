@@ -166,7 +166,8 @@ class IntelligenceService:
         return self.create_source(payload)
 
     def create_default_sources(self, overrides: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        request_fields = overrides or {}
+        request_fields = dict(overrides or {})
+        request_fields.setdefault("enabled", False)
         created_count = 0
         items = []
         for template in self._builtin_source_templates():

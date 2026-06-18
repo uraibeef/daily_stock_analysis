@@ -37,7 +37,12 @@ NEWS_INTEL_MAX_ITEMS_PER_SOURCE=50
 NEWSNOW_BASE_URL=https://newsnow.busiyi.world
 ```
 
-`NEWSNOW_BASE_URL` 用于拼出 `GET {NEWSNOW_BASE_URL}/api/s?id=<source_id>`。默认值来自 NewsNow MCP Server 示例配置；生产环境建议改成自建 NewsNow 实例，以减少公开示例实例不可用或限流带来的影响。
+`NEWSNOW_BASE_URL` 用于拼出 `GET {NEWSNOW_BASE_URL}/api/s?id=<source_id>`。当前默认值为公开示例实例 `https://newsnow.busiyi.world`，官方/上游链路与形态请以你实际接入实例文档为准；生产环境建议改成自建 NewsNow 实例，以避免公开示例实例不可用或限流。
+
+兼容性核验建议（非 mock）：
+
+- `curl -sS "${NEWSNOW_BASE_URL}/api/s?id=cls-hot" | python -c "import sys, json; data=json.load(sys.stdin); assert isinstance(data, dict); assert isinstance(data.get('items'), list); print('ok')"`
+- 若要手工核验 `status`、`id`、`items[].title`、`items[].url`/`mobileUrl`、`items[].pubDate`/`items[].extra.date` 这类字段，可与测试回归组合使用：`test_newsnow_source_fetches_json_items`。
 
 ## API
 
@@ -47,7 +52,7 @@ NEWSNOW_BASE_URL=https://newsnow.busiyi.world
 - `GET /sources`：查询资讯源。
 - `GET /sources/templates?market=hk`：查询内置资讯源模板。
 - `POST /sources/templates/{template_id}`：从内置模板创建资讯源，可覆盖名称、启用状态、作用域和说明。
-- `POST /sources/defaults`：一键创建全部内置默认源；接口幂等，已存在的同名源会返回 `created=false`，不会重复插入。请求体可传 `{ "enabled": false }` 控制创建后的启用状态。
+- `POST /sources/defaults`：一键创建全部内置默认源；接口幂等，已存在的同名源会返回 `created=false`，不会重复插入。默认不传 `enabled` 时以 `false` 创建；如需默认启用可传 `{ "enabled": true }`。
 - `POST /sources/test`：测试 payload，不落库。
 - `POST /sources/{source_id}/fetch?dry_run=false`：拉取单个源。
 - `POST /sources/fetch-enabled`：fail-open 拉取全部启用源。

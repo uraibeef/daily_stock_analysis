@@ -128,9 +128,30 @@ class IntelligenceApiTestCase(unittest.TestCase):
         self.assertEqual(fetch_resp.status_code, 500)
         body = fetch_resp.json()
         self.assertEqual(body["error"], "internal_error")
-        self.assertTrue(body["message"].startswith("Fetch intelligence source failed"))
-        self.assertNotIn("token=secret", body["message"])
-        self.assertNotIn("abc12345", body["message"])
+        self.assertEqual(body["message"], "Fetch intelligence source failed: internal intelligence service error")
+
+    def test_fetch_source_internal_error_without_sensitive_pattern_is_generic(self) -> None:
+        create_resp = self.client.post("/api/v1/intelligence/sources", json={"name": "api-feed", "url": "https://feeds.example.com/rss.xml", "source_type": "rss", "scope_type": "market", "market": "cn"})
+        self.assertEqual(create_resp.status_code, 200)
+        source_id = create_resp.json()["id"]
+        with patch("src.services.intelligence_service.IntelligenceService.fetch_source", side_effect=RuntimeError("unexpected runtime assertion failure: pipeline context exhausted")):
+            fetch_resp = self.client.post(f"/api/v1/intelligence/sources/{source_id}/fetch")
+
+        self.assertEqual(fetch_resp.status_code, 500)
+        body = fetch_resp.json()
+        self.assertEqual(body["error"], "internal_error")
+        self.assertEqual(body["message"], "Fetch intelligence source failed: internal intelligence service error")
+        self.assertNotIn("pipeline context exhausted", body["message"])
+
+    def test_create_builtin_default_sources_are_disabled_by_default(self) -> None:
+        default_resp = self.client.post("/api/v1/intelligence/sources/defaults")
+        self.assertEqual(default_resp.status_code, 200)
+        newsnow_sources = [
+            item["source"] for item in default_resp.json()["items"]
+            if item["source"]["source_type"] == "newsnow"
+        ]
+        self.assertGreaterEqual(len(newsnow_sources), 5)
+        self.assertTrue(all(not item["enabled"] for item in newsnow_sources))
 
     def test_upstream_fetch_errors_do_not_expose_query_secret(self) -> None:
         secret_url = "https://feeds.example.com/rss.xml?token=super-secret"

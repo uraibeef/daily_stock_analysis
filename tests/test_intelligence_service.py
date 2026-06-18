@@ -296,6 +296,13 @@ class IntelligenceServiceTestCase(unittest.TestCase):
         self.assertGreaterEqual(sources["total"], 3)
         self.assertTrue(all(not item["source"]["enabled"] for item in first["items"]))
 
+    def test_create_default_sources_are_disabled_by_default(self) -> None:
+        first = self.service.create_default_sources()
+        sources = self.service.list_sources()
+        self.assertEqual(first["created_count"], first["total"])
+        self.assertEqual(sources["total"], first["total"])
+        self.assertTrue(all(not item["enabled"] for item in sources["items"]))
+
     def test_same_url_can_be_saved_for_different_scopes(self) -> None:
         market = self.service.create_source({
             "name": "market-feed",

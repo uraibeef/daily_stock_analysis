@@ -39,7 +39,10 @@ def _not_found(message: str) -> HTTPException:
 def _internal_error(message: str, exc: Exception) -> HTTPException:
     sanitized_error = sanitize_diagnostic_text(str(exc), max_length=300) or "internal intelligence error"
     logger.error("%s: %s", message, sanitized_error)
-    return HTTPException(status_code=500, detail={"error": "internal_error", "message": f"{message}: {sanitized_error}"})
+    return HTTPException(
+        status_code=500,
+        detail={"error": "internal_error", "message": f"{message}: internal intelligence service error"},
+    )
 
 
 @router.post("/sources", response_model=IntelligenceSourceItem, responses={400: {"model": ErrorResponse}, 500: {"model": ErrorResponse}}, summary="Create intelligence source")
