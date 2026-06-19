@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 import logging
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple, get_args
 
 from data_provider.base import canonical_stock_code, normalize_stock_code
@@ -416,7 +416,12 @@ class DecisionSignalService:
 
         if created_at is None:
             return
-        payload["_created_at_override"] = to_utc_naive_datetime(created_at)
+        history_created_at = self._coerce_history_created_at_to_utc_naive(created_at)
+        if history_created_at is None:
+            payload["status"] = "expired"
+            return
+
+        payload["_created_at_override"] = history_created_at
         horizon = payload.get("horizon") or self._default_horizon(
             action=str(payload.get("action") or ""),
             market_phase=payload.get("market_phase"),
@@ -425,7 +430,7 @@ class DecisionSignalService:
             payload["horizon"] = horizon
 
         expires_at = self._history_backfill_expires_at(
-            created_at=created_at,
+            created_at=history_created_at,
             horizon=horizon,
             market=str(payload.get("market") or ""),
             metadata=payload.get("metadata"),
@@ -435,6 +440,20 @@ class DecisionSignalService:
         payload["expires_at"] = expires_at
         if self._is_expired(expires_at):
             payload["status"] = "expired"
+
+    @staticmethod
+    def _coerce_history_created_at_to_utc_naive(value: datetime) -> datetime:
+        if value.tzinfo is not None:
+            return to_utc_naive_datetime(value)
+
+        local_tz = datetime.now().astimezone().tzinfo
+        if local_tz is None or local_tz.utcoffset(value) is None:
+            return to_utc_naive_datetime(value)
+
+        try:
+            return value.replace(tzinfo=local_tz).astimezone(timezone.utc).replace(tzinfo=None)
+        except (OverflowError, OSError):
+            return to_utc_naive_datetime(value)
 
     def _invalidate_history_backfill_if_superseded(self, signal_id: int) -> None:
         row = self.repo.get(signal_id)

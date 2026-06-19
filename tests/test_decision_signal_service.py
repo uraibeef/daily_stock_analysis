@@ -252,6 +252,7 @@ def test_list_signals_lazily_backfills_analysis_history_signal(isolated_db) -> N
         row.created_at = report_created_at
         session.commit()
     service = DecisionSignalService(db_manager=isolated_db)
+    expected_created_at = service._coerce_history_created_at_to_utc_naive(report_created_at)
 
     listed = service.list_signals(source_type="analysis", source_report_id=record_id)
 
@@ -266,7 +267,7 @@ def test_list_signals_lazily_backfills_analysis_history_signal(isolated_db) -> N
     assert item["reason"] == "趋势仍在，但等待量能确认。"
     assert item["watch_conditions"] == '["回踩不破支撑"]'
     assert item["status"] == "expired"
-    assert datetime.fromisoformat(item["created_at"]) == report_created_at
+    assert datetime.fromisoformat(item["created_at"]) == expected_created_at
 
     listed_again = service.list_signals(source_type="analysis", source_report_id=record_id)
     assert listed_again["total"] == 1
@@ -301,6 +302,7 @@ def test_list_signals_backfill_uses_saved_intraday_ttl_metadata(
         row.created_at = report_created_at
         session.commit()
     service = DecisionSignalService(db_manager=isolated_db)
+    expected_report_created_at = service._coerce_history_created_at_to_utc_naive(report_created_at)
 
     listed = service.list_signals(source_type="analysis", source_report_id=record_id)
 
@@ -308,7 +310,60 @@ def test_list_signals_backfill_uses_saved_intraday_ttl_metadata(
     item = listed["items"][0]
     assert item["horizon"] == "intraday"
     assert item["status"] == "expired"
-    assert datetime.fromisoformat(item["expires_at"]) == report_created_at + expected_ttl
+    assert datetime.fromisoformat(item["expires_at"]) == expected_report_created_at + expected_ttl
+
+
+def test_list_signals_backfill_converts_naive_history_created_at_for_invalidation_ordering(
+    monkeypatch,
+    isolated_db,
+) -> None:
+    record_id = isolated_db.save_analysis_history(
+        result=_history_result(
+            operation_advice="买入",
+            decision_type="buy",
+            action="buy",
+            action_label="买入",
+        ),
+        query_id="query-lazy-signal-local-tz",
+        report_type="simple",
+        news_content="新闻摘要",
+        context_snapshot={"market_phase_summary": {"phase": "postmarket"}},
+        save_snapshot=True,
+    )
+    report_created_at = utc_naive_now() - timedelta(hours=1)
+    with isolated_db.get_session() as session:
+        row = session.query(AnalysisHistory).filter(AnalysisHistory.id == record_id).one()
+        row.created_at = report_created_at
+        session.commit()
+    service = DecisionSignalService(db_manager=isolated_db)
+
+    def fake_coerce_history_created_at_to_utc_naive(value: datetime) -> datetime:
+        assert value == report_created_at
+        return value - timedelta(hours=8)
+
+    monkeypatch.setattr(
+        service,
+        "_coerce_history_created_at_to_utc_naive",
+        fake_coerce_history_created_at_to_utc_naive,
+    )
+
+    newer_sell = service.create_signal(
+        _payload(
+            source_report_id=record_id + 1000,
+            trace_id="trace-local-tz-opposing-sell",
+            action="sell",
+            _created_at_override=report_created_at + timedelta(hours=13),
+        )
+    )["item"]
+
+    listed = service.list_signals(source_type="analysis", source_report_id=record_id)
+
+    assert listed["total"] == 1
+    item = listed["items"][0]
+    assert datetime.fromisoformat(item["created_at"]) == report_created_at - timedelta(hours=8)
+    assert item["action"] == "buy"
+    assert item["status"] == "invalidated"
+    assert item["metadata"]["invalidated_by_signal_id"] == newer_sell["id"]
 
 
 def test_list_signals_invalidates_stale_backfill_when_newer_opposing_signal_exists(isolated_db) -> None:
