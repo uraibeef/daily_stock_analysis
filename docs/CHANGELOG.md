@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-- [修复] 本次改动仅收敛 JP/KR 建议清单渲染与远端 stock-index 载荷校验，文件范围包括 `apps/dsa-web/src/components/StockAutocomplete`、`src/services/stock_index_remote_service.py` 及对应单测，运行态仍为 suffix-only 提交路径；不包含 bare-code 后端解析（如 `000660` / `005930` 自动补齐为 `.KS`）、历史/任务链路改造，也未触及 `api/v1/endpoints/analysis.py`、`api/v1/endpoints/history.py`、`src/data/stock_index_loader.py`、`src/services/history_service.py` 与 provider/model/base URL 或运行时配置清理/迁移语义。
+- [修复] Refs #1718：本次改动仅收敛 JP/KR 自动补全建议清单市场徽标渲染与远端 stock-index 载荷市场白名单校验，文件范围仅 `apps/dsa-web/src/components/StockAutocomplete`、`src/services/stock_index_remote_service.py` 及对应单测，运行时仍为 suffix-only 提交路径；不包含 bare-code 后端解析（如 `000660` / `005930` 自动补齐为 `.KS`）、历史/任务展示改造，也不改动 `api/v1/endpoints/analysis.py`、`api/v1/endpoints/history.py`、`src/data/stock_index_loader.py`、`src/services/history_service.py`、provider/model/base URL 或运行时配置清理/迁移语义。
 
 - [新功能] #1390 P6 将 DecisionSignal 复用到告警、通知和组合风险：告警触发关联 latest active 信号或创建最小 alert 信号，通知追加低敏信号摘要，持仓风险聚合 active sell/reduce/alert 信号并保持 fail-open。
 - [修复] #1722 修复 #1390 P6 DecisionSignal 在组合风险快照语义和默认聚合通知展示中的遗漏。
