@@ -30,7 +30,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [修复] Docker 镜像预置 efinance 缓存目录（efinance/data）属主给非 root 运行用户 dsa，修复 A 股 efinance 数据源因写 search-cache.json 触发 PermissionError 而每次抓取失败降级的问题。
 - [修复] Docker 部署中 Web 设置页保存自定义 Webhook 模板时自动转义 `$content_json` 等应用占位符，并在运行时还原，避免 Compose 重新部署将其展开为空。
 - [修复] 修复 Web 回测运行未传分析日期范围、股票代码未归一化导致后端成功返回但结果为空的问题，并为空候选和行情不足返回诊断信息。
-- [chore] PR #1734 回测修复的实际变更范围已同步为 11 个文件（补充 `src/repositories/backtest_repo.py`），并要求在 PR 描述中补充 Web 界面可视化验收材料或替代证据，确保与实际 diff 一致。
 
 ## [3.23.0] - 2026-06-20
 
