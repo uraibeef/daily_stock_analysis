@@ -48,6 +48,7 @@ type ListFilters = {
   action: '' | DecisionAction;
   marketPhase: '' | MarketPhaseValue;
   sourceType: '' | DecisionSignalSourceType;
+  sourceReportId: string;
   status: '' | DecisionSignalStatus;
 };
 
@@ -90,7 +91,24 @@ const STATUS_ACTION_CONFIRM_KEYS: Record<PendingStatusChange['status'], UiTextKe
   archived: 'decisionSignals.archiveConfirm',
 };
 
+function parseSourceReportId(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const parsed = Number(trimmed);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
 function toListParams(filters: ListFilters, page: number): DecisionSignalListParams {
+  const sourceReportId = parseSourceReportId(filters.sourceReportId);
+  if (sourceReportId !== undefined) {
+    return {
+      sourceReportId,
+      sourceType: 'analysis',
+      page,
+      pageSize: PAGE_SIZE,
+    };
+  }
+
   return {
     market: filters.market || undefined,
     stockCode: filters.stockCode.trim() || undefined,
@@ -131,6 +149,7 @@ const DecisionSignalsPage: React.FC = () => {
     action: '',
     marketPhase: '',
     sourceType: '',
+    sourceReportId: '',
     status: 'active',
   });
   const [appliedFilters, setAppliedFilters] = useState<ListFilters>(filters);
@@ -350,7 +369,7 @@ const DecisionSignalsPage: React.FC = () => {
         if (current.source === 'latest') {
           return updated.status === 'active' ? { source: 'latest', item: updated } : null;
         }
-        if (appliedFilters.status && updated.status !== appliedFilters.status) return null;
+        if (!parseSourceReportId(appliedFilters.sourceReportId) && appliedFilters.status && updated.status !== appliedFilters.status) return null;
         return { source: 'list', item: updated };
       });
       setError(null);
@@ -411,7 +430,7 @@ const DecisionSignalsPage: React.FC = () => {
         />
 
         <Card padding="md">
-          <form className="grid gap-3 md:grid-cols-3 xl:grid-cols-6" onSubmit={handleApplyFilters}>
+          <form className="grid gap-3 md:grid-cols-3 xl:grid-cols-7" onSubmit={handleApplyFilters}>
             <select
               className="input-surface input-focus-glow h-11 rounded-xl border bg-transparent px-3 text-sm"
               value={filters.market}
@@ -463,6 +482,17 @@ const DecisionSignalsPage: React.FC = () => {
                 <option key={source} value={source}>{getDecisionSignalSourceTypeLabel(source, t)}</option>
               ))}
             </select>
+            <input
+              className="input-surface input-focus-glow h-11 rounded-xl border bg-transparent px-3 text-sm"
+              value={filters.sourceReportId}
+              onChange={(event) => setFilters((current) => ({ ...current, sourceReportId: event.target.value }))}
+              placeholder={t('decisionSignals.sourceReportId')}
+              aria-label={t('decisionSignals.sourceReportId')}
+              inputMode="numeric"
+              min={1}
+              step={1}
+              type="number"
+            />
             <select
               className="input-surface input-focus-glow h-11 rounded-xl border bg-transparent px-3 text-sm"
               value={filters.status}
@@ -472,7 +502,7 @@ const DecisionSignalsPage: React.FC = () => {
               <option value="">{t('decisionSignals.allStatuses')}</option>
               {STATUS_OPTIONS.map((status) => <option key={status} value={status}>{t(STATUS_LABEL_KEYS[status])}</option>)}
             </select>
-            <button type="submit" className="btn-primary inline-flex h-11 items-center justify-center gap-2 xl:col-start-6">
+            <button type="submit" className="btn-primary inline-flex h-11 items-center justify-center gap-2">
               <Search className="h-4 w-4" />
               {t('decisionSignals.filter')}
             </button>

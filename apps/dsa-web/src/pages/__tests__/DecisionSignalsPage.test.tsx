@@ -194,6 +194,7 @@ describe('DecisionSignalsPage', () => {
     expect(within(screen.getByLabelText('阶段')).getByRole('option', { name: '午间休市' })).toHaveValue('lunch_break');
     expect(within(screen.getByLabelText('阶段')).getByRole('option', { name: '集合竞价' })).toHaveValue('closing_auction');
     expect(within(screen.getByLabelText('来源')).getByRole('option', { name: '大盘复盘' })).toHaveValue('market_review');
+    expect(screen.getByLabelText('来源报告 ID')).toBeInTheDocument();
   });
 
   it('renders decision signal filters and card value labels in English', async () => {
@@ -214,6 +215,7 @@ describe('DecisionSignalsPage', () => {
     expect(within(screen.getByLabelText('Market')).getByRole('option', { name: 'Korea' })).toHaveValue('kr');
     expect(within(screen.getByLabelText('Phase')).getByRole('option', { name: 'Closing auction' })).toHaveValue('closing_auction');
     expect(within(screen.getByLabelText('Source')).getByRole('option', { name: 'Market review' })).toHaveValue('market_review');
+    expect(screen.getByLabelText('Source report ID')).toBeInTheDocument();
     expect(screen.getAllByText('Japan').length).toBeGreaterThan(1);
     expect(screen.getByText('Horizon')).toBeInTheDocument();
     expect(screen.getByText('10 days')).toBeInTheDocument();
@@ -241,6 +243,28 @@ describe('DecisionSignalsPage', () => {
         page: 1,
         pageSize: 20,
       }));
+    });
+  });
+
+  it('uses an exact analysis source report lookup when a report id filter is applied', async () => {
+    renderPage();
+    await screen.findByText('贵州茅台');
+
+    fireEvent.change(screen.getByLabelText('市场'), { target: { value: 'cn' } });
+    fireEvent.change(screen.getByLabelText('股票代码'), { target: { value: '600519' } });
+    fireEvent.change(screen.getByLabelText('动作'), { target: { value: 'hold' } });
+    fireEvent.change(screen.getByLabelText('来源'), { target: { value: 'alert' } });
+    fireEvent.change(screen.getByLabelText('状态'), { target: { value: 'closed' } });
+    fireEvent.change(screen.getByLabelText('来源报告 ID'), { target: { value: '3001' } });
+    fireEvent.click(screen.getByRole('button', { name: '筛选' }));
+
+    await waitFor(() => {
+      expect(decisionSignalsApi.list).toHaveBeenLastCalledWith({
+        sourceReportId: 3001,
+        sourceType: 'analysis',
+        page: 1,
+        pageSize: 20,
+      });
     });
   });
 
