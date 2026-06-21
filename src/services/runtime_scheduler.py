@@ -112,6 +112,43 @@ class RuntimeSchedulerService:
     def _is_schedule_enabled(self, config: Config) -> bool:
         return self._force_enabled or bool(getattr(config, "schedule_enabled", False))
 
+    def _register_event_monitor(self, scheduler: Scheduler, config: Config) -> None:
+        if not getattr(config, "agent_event_monitor_enabled", False):
+            return
+
+        interval_minutes = getattr(config, "agent_event_monitor_interval_minutes", 5)
+        try:
+            interval_minutes = max(1, int(interval_minutes))
+        except (TypeError, ValueError):  # pragma: no cover - defensive branch
+            logger.warning(
+                "Invalid AGENT_EVENT_MONITOR_INTERVAL_MINUTES=%r; use fallback 5",
+                interval_minutes,
+            )
+            interval_minutes = 5
+        try:
+            from src.services.alert_worker import AlertWorker
+        except Exception as exc:
+            logger.warning("Failed to load AlertWorker for event monitor: %s", exc)
+            return
+
+        alert_worker = AlertWorker(config_provider=self._reload_config)
+
+        def event_monitor_task() -> None:
+            try:
+                stats = alert_worker.run_once()
+                triggered_count = stats.get("triggered", 0)
+                if triggered_count:
+                    logger.info("[EventMonitor] 本轮触发 %d 条提醒", triggered_count)
+            except Exception as exc:  # noqa: BLE001 - event monitor should not crash scheduler loop.
+                logger.exception("Runtime event monitor task failed: %s", exc)
+
+        scheduler.add_background_task(
+            task=event_monitor_task,
+            interval_seconds=interval_minutes * 60,
+            run_immediately=True,
+            name="agent_event_monitor",
+        )
+
     @staticmethod
     def _run_in_background_thread(target: Callable[[], None]) -> None:
         """Run a callback in a background thread without blocking startup."""
@@ -149,6 +186,7 @@ class RuntimeSchedulerService:
                 self._run_in_background_thread(self._run_analysis_once)
             else:
                 scheduler.set_daily_task(self._run_analysis_once, run_immediately=run_immediately)
+            self._register_event_monitor(scheduler=scheduler, config=config)
             thread = threading.Thread(
                 target=scheduler.run,
                 daemon=True,

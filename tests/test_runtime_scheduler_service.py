@@ -10,7 +10,7 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -178,6 +178,84 @@ class RuntimeSchedulerServiceTestCase(unittest.TestCase):
             service.reconcile_from_config()
 
         self.assertEqual(calls, ["run"])
+
+    def test_start_registers_event_monitor_background_task(self) -> None:
+        class _FakeScheduler:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+                self.background_tasks = []
+                self.daily_task = None
+                self.daily_task_run_immediately = None
+                self._jobs = []
+
+            def set_daily_task(self, task, run_immediately: bool) -> None:
+                self.daily_task = task
+                self.daily_task_run_immediately = run_immediately
+
+            def add_background_task(
+                self,
+                task: callable,
+                interval_seconds: int,
+                run_immediately: bool,
+                name: str | None = None,
+            ) -> None:
+                self.background_tasks.append({
+                    "task": task,
+                    "interval_seconds": interval_seconds,
+                    "run_immediately": run_immediately,
+                    "name": name,
+                })
+
+            def run(self) -> None:
+                return None
+
+            def stop(self) -> None:
+                return None
+
+            @property
+            def schedule(self):
+                class _Namespace:
+                    @staticmethod
+                    def get_jobs():
+                        return []
+
+                return _Namespace
+
+            @property
+            def schedule_time(self):
+                return self.kwargs.get("schedule_time")
+
+        fake_worker = MagicMock()
+        fake_worker.run_once.return_value = {"triggered": 2}
+
+        config = SimpleNamespace(
+            schedule_enabled=True,
+            schedule_time="18:00",
+            schedule_times=["18:00"],
+            agent_event_monitor_enabled=True,
+            agent_event_monitor_interval_minutes=7,
+        )
+
+        service = RuntimeSchedulerService(config_provider=lambda: config)
+        service._reload_config = lambda: config
+
+        with patch(
+            "src.services.runtime_scheduler.Scheduler",
+            _FakeScheduler,
+        ), patch(
+            "src.services.runtime_scheduler.threading.Thread",
+            _NoopThread,
+        ), patch("src.services.alert_worker.AlertWorker", return_value=fake_worker):
+            service.start()
+
+        scheduler = service._scheduler
+        self.assertIsNotNone(scheduler)
+        self.assertEqual(len(scheduler.background_tasks), 1)  # type: ignore[attr-defined]
+        self.assertEqual(scheduler.background_tasks[0]["name"], "agent_event_monitor")  # type: ignore[index]
+        self.assertEqual(scheduler.background_tasks[0]["interval_seconds"], 7 * 60)  # type: ignore[index]
+        self.assertEqual(scheduler.background_tasks[0]["run_immediately"], True)  # type: ignore[index]
+        scheduler.background_tasks[0]["task"]()  # type: ignore[index]
+        fake_worker.run_once.assert_called_once()
 
     def test_force_enabled_survives_time_reconcile_until_explicit_enabled_update(self) -> None:
         fake_schedule = _FakeScheduleModule()

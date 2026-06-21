@@ -934,7 +934,7 @@ function startBackend({ port, envFile, dbPath, logDir }) {
     FEISHU_STREAM_ENABLED: 'false',
   };
 
-  const args = ['--serve-only', '--host', '127.0.0.1', '--port', String(port)];
+  const args = ['--serve', '--host', '127.0.0.1', '--port', String(port)];
   let launchMode = '';
   let launchCommand = '';
   let launchCwd = '';
