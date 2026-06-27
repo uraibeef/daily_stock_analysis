@@ -54,8 +54,8 @@ git diff --name-only "$BASE_REF"..HEAD
 python -m pytest -m "not network"
 ```
 
-> `Full-suite note` 必须与当次 PR 的 CI 结果保持一致；若本地复现存在环境相关失败，请明确标注为“本地环境差异”并给出 GitHub CI 通过/失败结论与链接。  
-> 若本次 PR Head CI 已通过，请在 `Full-suite note` 中改为当前 Head 状态（如 `pass`），并删去所有“仍失败/失败”历史措辞。
+> `Full-suite note` 必须与当次 PR 的当前 Head CI 结果保持一致；若本地复现存在环境相关失败，请明确标注“本地环境差异”并给出 GitHub CI 的结论与链接。  
+> 请避免保留与本 PR 无关的历史失败措辞，按本次实际结果填报。
 
 - 请在下面按实际结果填写并与 `Full-suite note` 保持一致（任一未填视为信息缺失）：
   - ai-governance：`pass` / `fail`，附链接
@@ -66,13 +66,10 @@ python -m pytest -m "not network"
 关键输出/结论 / Key output & conclusion:
 
 - 【必填】当前 Head CI：`ai-governance:pass / backend-gate:pass / docker-build:pass / web-gate:pass`（按实际结果替换）并附对应链接。  
-  如需保留历史失败措辞，必须在同段写明“本地环境差异 + 当前 CI 已通过 + 当前 Head 结果链接”；否则不得出现“仍失败/失败”字样。
-  - 当前 PR 建议示例（CI 全部通过时）：`当前 Head CI：ai-governance:pass / backend-gate:pass / docker-build:pass / web-gate:pass`
-  - `当前状态：全部通过（pass）`
+- 若需保留本地失败现象，请在同段写明“本地环境差异 + 当前 CI 通过/失败结果 + CI 链接”。  
+- 若全部通过，需补充一句：`当前状态：全部通过（pass）`，并明确 Head CI 全部为 pass。  
 
-- 若全部通过，请额外补充一句：`当前状态：全部通过（pass）`，并明确 Head CI 对应全部 `pass`。
-
-- 建议在 PR 描述内按上述格式追加一行：`当前 Head CI：ai-governance:pass / backend-gate:pass / docker-build:pass / web-gate:pass`（仅示例，按实际结果替换）。
+- 建议将本行直接粘贴到 PR 描述正文首段：`当前 Head CI：ai-governance:pass / backend-gate:pass / docker-build:pass / web-gate:pass`（仅示例，按实际结果替换）。
 
 > 若上述核验项与 PR 文本冲突，建议先更新 PR 描述再提交，避免审查因状态不一致被阻塞。
 
@@ -81,7 +78,7 @@ python -m pytest -m "not network"
 若本 PR 修改报告格式、报告渲染效果或 Web UI 界面，请在此处附受影响报告 / 页面截图；涉及前后差异时，优先附前后对比。Issue / PR 过程截图、审查截图、一次性验收截图和临时可视证据请放在 PR 描述、PR 评论、GitHub 附件、Actions artifact 或外部可访问链接中，不要作为仓库文件合入。
 *(EN) If this PR changes report formatting, report rendering, or Web UI, attach screenshots of the affected report/page here; before/after screenshots are preferred when relevant. Issue/PR process screenshots, review screenshots, one-off acceptance screenshots, and temporary visual evidence should be linked from the PR body/comments, GitHub attachments, Actions artifacts, or external accessible evidence; do not commit them as repository files.)*
 
-> 如截图无法获取，请在“原因”中明确写明替代证据（如 Playwright/e2e 产物路径、审查链接）及其可追溯命令，不得留空。涉及 Web 设置字段变更时，需确保截图或替代证据明确指向设置页变更项。
+> 如截图无法获取，请在“原因”中明确写明替代证据（如 Playwright/e2e 产物路径、审查链接）及其可追溯命令，不得留空。涉及 Web 设置/报告渲染变更时，需确保截图或替代证据明确指向变更项。
 >
 > 若本 PR 修改 Web UI，建议至少补一条可复现路径，例如（优先 settings page）：
 >
@@ -91,7 +88,7 @@ python -m pytest -m "not network"
 > 替代证据模板（设置页变更建议）：
 > - 命令：`cd apps/dsa-web && npx playwright test e2e/smoke.spec.ts --grep "settings page"`
 > - 产物路径：`apps/dsa-web/test-results/**/smoke-settings-page-*.png`
-> - 说明：截图中应可见 `MARKET_REVIEW_REGION` 的选项文案（A 股/港股/美股/日股/韩股/全部市场）
+> - 说明：截图中应可见本次修改的系统设置项（字段、标签、帮助文案）
 
 - 截图链接 / Screenshot links（Web UI/报告改动项必填）：
 - settings 页建议命名：`smoke-settings-page-zh` / `smoke-settings-page-en`
@@ -99,9 +96,9 @@ python -m pytest -m "not network"
 - 不适用原因 / Reason if not applicable（若未附截图，此项务必填写，且包含可复现证据与命令）：
   - Playwright 命令（无截图时）：`cd apps/dsa-web && npx playwright test e2e/smoke.spec.ts --grep "settings page"`
   - 产物路径（无截图时）：`apps/dsa-web/test-results/**/smoke-settings-page-*.png`
-  - 说明：截图（或产物）必须可见 `MARKET_REVIEW_REGION` 枚举变更文本（A 股 / 港股 / 美股 / 日股 / 韩股 / 全部市场）。
+  - 说明：截图（或产物）必须可见本次修改的设置字段文案与帮助信息。
 
-- 若本 PR 修改 `MARKET_REVIEW_REGION`、设置字段文案或帮助文案（如大盘复盘市场/交易日开关/色彩方案），截图或替代证据必须可定位到“系统设置 → 市场复盘”区域并指向对应字段；该项为必填。
+> 若本 PR 修改 Web 设置字段（字段、文案或帮助文案），截图或替代证据必须可定位到对应设置项区域并可追溯至变更项；该项为必填。
 
 > 若本 PR 修改 Web UI 或报告展示且无法获取截图，原因栏必须给出可复现替代证据（例如 Playwright 截图产物路径 + 命令），且不得留空。
 
@@ -111,7 +108,7 @@ python -m pytest -m "not network"
 *(EN) Describe compatibility impact and potential risks (write `None` if not applicable).*
 
 - 若本 PR 修改第三方模型 / API 的兼容语义、请求参数、路由前缀或 provider fallback，请提供**官方来源链接或公告**，并说明这是长期约束、当前运行时约束还是临时兼容处理。  
-  若本 PR 涉及 Yahoo Finance 指数源（包括 JP/KR 主指数），需额外说明：已验证的指数 symbol 与回归证据（例如 `^N225`/`^TOPX`、`^KS11`/`^KQ11` 与 `tests/test_yfinance_jp_kr_indices.py` 结果）、以及回退范围（例如主指数失败时仅跳过对应市场复盘，不影响其他市场复盘和个股分析）。  
+  请在下方补充所影响外部 API/服务、回归范围与回退方式。  
   *(EN) If this PR changes third-party model/API compatibility, request parameters, routing prefixes, or provider fallback behavior, include an **official source link or announcement** and clarify whether the rule is permanent, runtime-specific, or a temporary compatibility workaround.)*
 - 若本 PR 依赖特定运行时 / 锁定依赖窗口（例如 LiteLLM 版本范围、OpenAI-compatible 路由、YAML alias 行为），请写明当前验证过的兼容范围与覆盖路径。  
   *(EN) If this PR depends on a specific runtime or pinned dependency window (for example a LiteLLM version range, OpenAI-compatible routing, or YAML alias behavior), state the compatibility window you verified and which code paths were covered.)*
@@ -148,5 +145,5 @@ python -m pytest -m "not network"
 - [ ] 已评估兼容性与风险 / Compatibility and risk have been assessed
 - [ ] 已提供回滚方案 / A rollback plan is provided
 - [ ] 若修改报告格式或 Web UI 界面，已在 PR 描述/评论附受影响报告 / 页面截图，且未把一次性验收截图作为仓库文件合入 / If report formatting or Web UI changed, affected report/page screenshots are linked in the PR body/comments and one-off acceptance screenshots are not committed as repository files
-- [ ] 若本 PR 修改 Web 设置字段（如 `MARKET_REVIEW_REGION` 枚举、文案与帮助文本），请补充设置页截图；无法截图时需提供替代可视证据（命令 + 产物路径），并指向设置页变更项 / If Web settings fields changed (such as `MARKET_REVIEW_REGION` enums, labels, or help text), screenshots of the settings page are required; if unavailable, provide alternative visual evidence with command + artifact path that points to the changed fields.
+- [ ] 若本 PR 修改 Web 设置字段（字段、文案或帮助文本），请补充设置页截图；无法截图时需提供替代可视证据（命令 + 产物路径），并指向对应变更项 / If Web settings fields changed (labels or help text), screenshots of the settings page are required; if unavailable, provide alternative visual evidence with command + artifact path that points to the changed item.
 - [ ] 若涉及用户可见变更，已同步更新相关文档与 `docs/CHANGELOG.md`；`README.md` 仅在首页级信息变化时更新，细节优先写入 `docs/*.md` / If user-visible changes are included, relevant docs and `docs/CHANGELOG.md` are updated; `README.md` is updated only for homepage-level changes, with details kept in `docs/*.md`
