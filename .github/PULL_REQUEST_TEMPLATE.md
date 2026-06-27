@@ -58,6 +58,8 @@ python -m pytest -m "not network"
 
 关键输出/结论 / Key output & conclusion:
 
+- 【兼容示例】若 PR 文档仍保留“历史失败”字样，请在同一段明确补充“当前 CI 已通过”；若当前 CI 通过可直接写“当前 CI 全通过（含 backend-gate:pass）”避免误导 reviewer。
+
 ## Visual Evidence (if applicable)
 
 若本 PR 修改报告格式、报告渲染效果或 Web UI 界面，请在此处附受影响报告 / 页面截图；涉及前后差异时，优先附前后对比。Issue / PR 过程截图、审查截图、一次性验收截图和临时可视证据请放在 PR 描述、PR 评论、GitHub 附件、Actions artifact 或外部可访问链接中，不要作为仓库文件合入。

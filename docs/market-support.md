@@ -22,7 +22,14 @@
 兼容性与回退说明（针对结构化检测命中项）：
 
 - `#1815` 本次仅新增 `yfinance` 报价/基本面上下文中的可选字段元数据（如 `market`、`currency`、`data_quality`、`missing_fields`、`provider`），未改动 LLM provider/model/base URL、配置 Schema、运行时环境变量、数据库字段、存量缓存序列化或消息协议版本。
-- 外部 API 边界仍仅限既有 `yfinance` fetch 路径（含 `Ticker`/`history`/`fast_info`）与既有兜底逻辑；没有新增或迁移 API 网关/host，`YFINANCE_PRIORITY` 是唯一受影响的可见参数。
+- 外部 API 边界仍仅限既有 `yfinance` fetch 路径（含 `Ticker`/`history`/`fast_info`）与既有兜底逻辑；没有新增或迁移 API 网关/host，`YFINANCE_PRIORITY` 是唯一受影响的可见参数。JP/KR 主指数与 Yahoo symbol 对应如下（可核验）：
+  - 日经225：`^N225`（<https://finance.yahoo.com/quote/%5EN225/>）
+  - 东证指数：`^TOPX`（<https://finance.yahoo.com/quote/%5ETOPX/>）
+  - KOSPI：`^KS11`（<https://finance.yahoo.com/quote/%5EKS11/>）
+  - KOSDAQ：`^KQ11`（<https://finance.yahoo.com/quote/%5EKQ11/>）
+  - 依赖版本：`requirements.txt` 中 `yfinance>=0.2.0`，回归覆盖路径见 `tests/test_yfinance_jp_kr_indices.py` 与 `tests/test_yfinance_hk_indices.py`。
+- 兼容性与回退：`MARKET_REVIEW_REGION` 会保留合法逗号子集（如 `cn,us`）并保持 `both` 全量行为，非法值或空值回退到 `cn`，不会清空或迁移已保存配置。
+- 运行时边界：JP/KR 指数按 market_review 的 fail-open 约定逐项抓取；单项失败不会阻断其余指数与其他市场；当两个市场均无可用主指数行情时返回本地可见 `None/空`，主流程继续可按其余市场输出或直接降级。
 - 兼容性验证依据：行情/基本面上下文在 `data_provider/base.py` 与 `realtime_types.py` 中按现有 `getattr`/可选字段约定向下游透传，不强制读写新增字段；无配置迁移脚本，未观察到 provider/model/base URL fallback 路径变更。
 - 回退方式：若新增元数据字段在某端产生兼容问题，可先忽略这些字段并按既有市场判定+行情展示链路运行；必要时回滚本次提交或通过移除 `jp/kr` `MarketSymbol` 及路由扩展恢复旧行为。
 
