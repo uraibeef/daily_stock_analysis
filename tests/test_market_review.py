@@ -590,6 +590,55 @@ class MarketReviewLocalizationTestCase(unittest.TestCase):
         self.assertIn("### 港股大盘 / 板块主线", markdown)
         self.assertIn("| 1 | 科技 | +2.18% |", markdown)
 
+    def test_render_market_review_payload_markdown_checks_duplicate_titles_by_market_wrapper(self) -> None:
+        duplicate_title = "2026-06-03 大盘复盘"
+        markdown = market_review_module._render_market_review_payload_markdown(
+            {
+                "language": "zh",
+                "markdown_report": (
+                    "# A股大盘复盘\n\n"
+                    f"## {duplicate_title}\n\n"
+                    "### 板块表现\n\n"
+                    "#### 行业板块领涨 Top 5\n"
+                    "| 排名 | 行业板块 | 涨跌幅 |\n"
+                    "|------|------|--------|\n"
+                    "| 1 | AI算力 | +3.25% |\n\n"
+                    "---\n\n"
+                    "> 以下为下一市场大盘复盘\n\n"
+                    "# 港股大盘复盘\n\n"
+                    f"## {duplicate_title}\n\n"
+                    "港股正文。\n\n"
+                    "---\n\n"
+                    "> 以下为下一市场大盘复盘\n\n"
+                    "# 美股大盘复盘\n\n"
+                    f"## {duplicate_title}\n\n"
+                    "美股正文。"
+                ),
+                "markets": {
+                    "cn": {
+                        "title": duplicate_title,
+                        "language": "zh",
+                        "sectors": {"top": [{"name": "AI算力", "change_pct": 3.25}]},
+                    },
+                    "hk": {
+                        "title": duplicate_title,
+                        "language": "zh",
+                        "sectors": {"top": [{"name": "科技", "change_pct": 2.18}]},
+                    },
+                    "us": {
+                        "title": duplicate_title,
+                        "language": "zh",
+                        "sectors": {"top": [{"name": "半导体", "change_pct": 1.86}]},
+                    },
+                },
+            }
+        )
+
+        self.assertEqual(markdown.count("#### 行业板块领涨 Top 5"), 1)
+        self.assertEqual(markdown.count(f"### {duplicate_title} / 板块主线"), 2)
+        self.assertIn("| 1 | 科技 | +2.18% |", markdown)
+        self.assertIn("| 1 | 半导体 | +1.86% |", markdown)
+
     def test_persist_market_review_history_saves_markdown_report(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             old_db_path = os.environ.get("DATABASE_PATH")

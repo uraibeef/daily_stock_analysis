@@ -133,6 +133,15 @@ def _get_market_review_text(language: str) -> dict[str, str]:
     }
 
 
+def _get_market_review_market_heading(language: Any, market: str) -> str:
+    review_text = _get_market_review_text(str(language or "zh"))
+    title_key = next(
+        (candidate_title_key for mkt, candidate_title_key, _ in _MARKET_REVIEW_MARKETS if mkt == market),
+        "",
+    )
+    return str(review_text.get(title_key) or market.upper()).lstrip("#").strip()
+
+
 def _resolve_market_review_regions(raw_region: Optional[str]) -> list[str]:
     """Normalize MARKET_REVIEW_REGION into an ordered, non-empty region list."""
 
@@ -496,11 +505,17 @@ def _render_market_review_payload_body(payload: Dict[str, Any]) -> str:
                 market_payload = markets.get(market)
                 if not isinstance(market_payload, dict):
                     continue
+                title_prefix = str(market_payload.get("title") or market.upper()).strip()
+                wrapper_title = _get_market_review_market_heading(payload.get("language"), market)
+                segment_title_prefix = title_prefix
+                if wrapper_title and _extract_market_markdown_segment(original_markdown, wrapper_title):
+                    segment_title_prefix = wrapper_title
                 rendered = _append_missing_sector_payload_block(
                     rendered,
                     market_payload,
-                    title_prefix=str(market_payload.get("title") or market.upper()).strip(),
+                    title_prefix=title_prefix,
                     existing_markdown=original_markdown,
+                    segment_title_prefix=segment_title_prefix,
                 )
             return rendered
         parts = []
@@ -548,12 +563,14 @@ def _append_missing_sector_payload_block(
     *,
     title_prefix: str = "",
     existing_markdown: Optional[Any] = None,
+    segment_title_prefix: str = "",
 ) -> str:
     sector_block = _render_sector_payload_block(payload)
     if not sector_block:
         return markdown.strip()
     markdown_to_check = markdown if existing_markdown is None else existing_markdown
-    if _markdown_has_sector_table(markdown_to_check, title_prefix=title_prefix):
+    check_title_prefix = segment_title_prefix or title_prefix
+    if _markdown_has_sector_table(markdown_to_check, title_prefix=check_title_prefix):
         return markdown.strip()
 
     language = normalize_report_language(payload.get("language"))
@@ -586,11 +603,15 @@ def _markdown_has_sector_table(markdown: Any, *, title_prefix: str = "") -> bool
 def _extract_market_markdown_segment(markdown: str, title: str) -> Optional[str]:
     if not title:
         return None
-    heading_pattern = re.compile(rf"(?m)^#{{1,2}}\s+{re.escape(title)}\s*$")
+    heading_pattern = re.compile(rf"(?m)^(#{{1,2}})\s+{re.escape(title)}\s*$")
     match = heading_pattern.search(markdown)
     if not match:
         return None
-    next_heading = re.search(r"(?m)^(?:#{1,2}\s+|---\s*$)", markdown[match.end():])
+    heading_level = len(match.group(1))
+    next_heading = re.search(
+        rf"(?m)^(?:#{{1,{heading_level}}}\s+|---\s*$)",
+        markdown[match.end():],
+    )
     end = match.end() + next_heading.start() if next_heading else len(markdown)
     return markdown[match.start():end]
 
