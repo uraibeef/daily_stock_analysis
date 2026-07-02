@@ -9,7 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-- [修复] Web 大盘复盘结构化数据统一按两位小数格式化成交额、指数点位和涨跌幅，避免浮点长尾直接展示。
+- [修复] Discord 长报告推送按 2000 字符上限分片逐段发送，遇到 429 限流会按 `retry_after`/`Retry-After` 有限重试，避免中途失败后只收到前半段报告。
+- [改进] #1777 台股三大法人 fetcher（`TwInstitutionalFetcher`）增加缓存防击穿：并发同 (市场, 日期) 调用合并为单次上游请求，保护 TWSE T86 ~3 req/5s 限流额度；不同 key 仍并行；新增并发单次抓取、不同 key 各抓一次、HTTP 错误 fail-open 回归测试。
+- [修复] 修复桌面端启动时 `.env` 中 `WEBUI_PORT` 与 Electron 自动选择端口不一致会导致窗口继续等待旧端口并连接超时的问题。
+- [修复] A 股个股分析遇到空 `belong_boards` 占位时会继续补查所属板块，关联板块模块在已有板块时稳定展示；对应涨跌幅缺失时只显示板块，不再输出占位涨跌幅。
+- [修复] 大盘复盘在 LLM 标题漂移或正文缺少板块段时，会从结构化 `sectors` 兜底渲染板块表，避免 Web 与推送报告偶发缺少板块主线。
 
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
@@ -34,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [修复] 台股（tw）市场阶段（`market_phase`）新增收盘集合竞价识别：`_CLOSING_AUCTION_WINDOW_MINUTES` 缺 `tw` 键时 `.get(market, 0)` 得零宽窗口，TWSE/TPEx 13:25–13:30 的 5 分钟收盘竞价此前永远无法判定为 `closing_auction`（收盘前一刻仍 `intraday`、13:30 直接 `postmarket`）；补 `"tw": 5` 修正，附阶段边界回归测试。仅 tw 加项，cn/hk/us 与 jp/kr 行为不变。
 - [新功能] 新增 AI 建议决策风格重评估预览接口与页面预览。
 - [文档] 更新 README 三语入口和市场支持边界，明确台股个股分析已支持 `.TW` / `.TWO` suffix、三大法人报告区块、TWD 标注与收盘竞价识别，同时保留台股股票池自动补全、大盘复盘和大盘红绿灯告警的未覆盖边界。
+- [修复] Web 大盘复盘结构化数据统一格式化成交额、指数点位、涨跌幅和高/低值，避免浮点长尾或缺失值 `0.00` 直接展示。
 
 ## [3.24.1] - 2026-06-28
 
@@ -101,22 +106,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - 新增/更新台股、JP/KR 大盘复盘、GenerationBackend、`codex_cli`、Hermes、本地 CLI、runtime scheduler、回测和概念板块排行相关回归测试。
 - 加强 `tests/test_analysis_api_contract.py`、`tests/test_analysis_history.py` 与 `tests/test_backtest_service.py` 的临时 `.env` 隔离，避免本地真实 `.env` 污染系统配置测试。
-- [修复] 修复日股/韩股历史列表重建市场阶段摘要时将 non_trading 等结果阶段误传为 analysis_phase 导致列表查询失败的问题。
-- [新功能] 支持 SCHEDULE_TIMES 多时间定时推送，并让 Web/API/Desktop 长运行进程保存调度配置后热启停或重建 runtime scheduler。
-- [改进] Web 设置页以“定时任务”面板维护多时间定时推送、状态刷新和立即执行一次，不再向用户直接暴露 SCHEDULE_TIMES 等内部配置键。
-- [修复] 修复 `--serve --schedule` 下 CLI 调度器与 Web/API runtime scheduler 状态脱节的问题，并避免设置页把失败执行时间显示为上次成功。
-- [修复] runtime scheduler 的立即执行接口在已有分析运行时返回 409 忙碌状态，Web 设置页不再把未排队的请求提示为已提交。
-- [修复] 避免 runtime scheduler 重建定时任务时重复立即运行事件监控，减少重复告警和后台任务状态丢失。
-- [修复] Web/API runtime scheduler 接管 `--serve --schedule` 后保留 `--dry-run`、`--no-notify` 等启动参数语义。
-- [改进] Web 历史报告详情不再内嵌展示 AI 建议卡片，结构化决策信号集中在 AI 建议页查询，并保留按来源报告 ID 筛选或 URL 参数精确定位入口。
-- [修复] Web 大盘复盘结构化数据统一按两位小数格式化成交额、指数点位和涨跌幅，避免浮点长尾直接展示。
-- [改进] 新增 GenerationBackend Phase 1 抽象与 LiteLLM backend 配置，默认保持普通分析、`generate_text()` 和 Agent Chat 的 LiteLLM 行为不变。
-- [修复] unsupported `GENERATION_BACKEND` 在 `generate_text()` 与大盘复盘路径中显式报配置错误，避免被当成空响应或模板报告 fallback。
-- [改进] Web 设置页明确 `AGENT_GENERATION_BACKEND=auto` 当前使用 LiteLLM 工具调用路径，避免暗示已有动态 backend 选择。
-- [改进] Web 首页“任务已存在”重复分析提示新增手动关闭按钮与 5 秒后自动消失。
-- [修复] `main.py --serve-only` 在低配主机上因 uvicorn 在 3.0s 启动自检窗口内才惰性 import 应用（litellm + 整个 app 树）导致超时退出、容器反复重启；改为在计时前于调用线程预先 import app 对象再交给 uvicorn，启动自检不再误杀慢启动。
-- [修复] Docker 镜像预置 efinance 缓存目录（efinance/data）属主给非 root 运行用户 dsa，修复 A 股 efinance 数据源因写 search-cache.json 触发 PermissionError 而每次抓取失败降级的问题。
-- [修复] Docker 部署中 Web 设置页保存自定义 Webhook 模板时自动转义 `$content_json` 等应用占位符，并在运行时还原，避免 Compose 重新部署将其展开为空。
 
 ## [3.23.0] - 2026-06-20
 

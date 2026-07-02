@@ -245,6 +245,48 @@ describe('MarketReviewReportView', () => {
     expect(screen.queryByText(/0\.440797/)).not.toBeInTheDocument();
   });
 
+  it('formats string-backed market numbers and hides missing high/low zeros', () => {
+    const payload = {
+      version: 1,
+      kind: 'market_review',
+      region: 'cn',
+      language: 'en',
+      title: 'Market Review',
+      rootTitle: 'Market Review',
+      breadth: {
+        upCount: '4,327',
+        downCount: '1,145',
+        limitUpCount: '0',
+        limitDownCount: '12',
+        totalAmount: '36,822.49698199988',
+        turnoverUnit: 'bn',
+      },
+      indices: [{
+        code: '000001',
+        name: 'Shanghai Composite',
+        current: '4,112.446',
+        changePct: '0.44079750937683315%',
+        high: 0,
+        low: '0',
+      }],
+    } as unknown as MarketReviewPayload;
+
+    render(
+      <MarketReviewReportView
+        payload={payload}
+        content="# Market Review"
+        reportLanguage="en"
+      />,
+    );
+
+    expect(screen.getByText('4327')).toBeInTheDocument();
+    expect(screen.getByText('36822.50 bn')).toBeInTheDocument();
+    expect(screen.getByText('4112.45')).toBeInTheDocument();
+    expect(screen.getByText('0.44%')).toBeInTheDocument();
+    expect(screen.queryByText('0.00 / 0.00')).not.toBeInTheDocument();
+    expect(screen.queryByText(/0\.440797/)).not.toBeInTheDocument();
+  });
+
   it('opens run flow for historical market review records', () => {
     const onOpenRunFlow = vi.fn();
 

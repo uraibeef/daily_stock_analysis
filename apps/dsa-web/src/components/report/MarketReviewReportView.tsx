@@ -213,16 +213,23 @@ const coerceFiniteNumber = (value: unknown): number | null => {
   }
 
   if (typeof value === 'string' && value.trim()) {
-    const parsed = Number(value);
+    const normalizedValue = value.trim().replace(/,/g, '');
+    const numericText = normalizedValue.endsWith('%')
+      ? normalizedValue.slice(0, -1).trim()
+      : normalizedValue;
+    const parsed = Number(numericText);
     return Number.isFinite(parsed) ? parsed : null;
   }
 
   return null;
 };
 
-const formatMarketNumber = (value: unknown): string => {
+const formatMarketNumber = (value: unknown, options?: { zeroAsMissing?: boolean }): string => {
   const numericValue = coerceFiniteNumber(value);
-  return numericValue === null ? '-' : numericValue.toFixed(2);
+  if (numericValue === null || (options?.zeroAsMissing && numericValue === 0)) {
+    return '-';
+  }
+  return numericValue.toFixed(2);
 };
 
 const formatMarketCount = (value: unknown): string => {
@@ -244,8 +251,8 @@ const formatMarketPercent = (value: unknown): string => {
 };
 
 const formatMarketHighLow = (high: unknown, low: unknown): string => {
-  const highText = formatMarketNumber(high);
-  const lowText = formatMarketNumber(low);
+  const highText = formatMarketNumber(high, { zeroAsMissing: true });
+  const lowText = formatMarketNumber(low, { zeroAsMissing: true });
   return highText === '-' && lowText === '-' ? '-' : `${highText} / ${lowText}`;
 };
 
