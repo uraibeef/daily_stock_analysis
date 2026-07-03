@@ -10,6 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 - [修复] 修复任务状态接口重建报告动作字段时把合法情绪分 `0` 当成空值的问题，确保低分报告能按评分口径纠正为卖出建议。
 - [修复] 修复 Agent 流式回复在未收到完成事件就断开时被显示为“（无内容）”的问题，改为提示流式响应中断并保留用户消息，避免误判为空回答。
+- [修复] 修复 Windows 桌面端启动后端时固定传入 `--host 127.0.0.1` 导致 `.env` 中 `WEBUI_HOST=0.0.0.0` 不生效、局域网无法访问 WebUI 的问题；桌面端仍默认使用 `127.0.0.1`，仅在显式配置 `WEBUI_HOST` 后按配置绑定，并继续使用本机地址完成健康检查和窗口加载。
+- [新功能] 钉钉群机器人通知支持 — 支持通过 `DINGTALK_WEBHOOK_URL` 和 `DINGTALK_SECRET` 配置钉钉推送，并支持长文本自动切片以适配 20KB 限制。
+- [修复] 修复桌面端 `WEBUI_HOST=*` / `WEBUI_HOST=[::]` 会被原样传给端口探测和后端启动导致无法监听的问题，启动前分别规范化为 `0.0.0.0` / `::`。
+
+- [文档] 记录 Agent `/chat/stream` progress event 契约，说明新增 `stage_start`、`stage_done`、`pipeline_timeout`、`pipeline_budget_skipped` 的字段语义、Web 兼容边界、验证方式、回滚方式；其中 `pipeline_budget_skipped` 表示剩余预算不足、未启动下一阶段即跳过的语义；本变更不触及 provider/model/Base URL 或运行时配置迁移语义。
+- [修复] 日股/韩股 `market_phase` 补齐收盘集合竞价识别：JP 15:25-15:30 与 KR 15:20-15:30 现在会进入 `closing_auction`，避免临近收盘阶段仍被标记为普通 `intraday`；仅调整阶段标签和派生 `market_phase_summary`，不改变数据源、配置或交易日 fail-open/fail-closed 语义。
+- [修复] Discord 长报告推送按 2000 字符上限分片逐段发送，遇到 429 限流会按 `retry_after`/`Retry-After` 有限重试，避免中途失败后只收到前半段报告。
+- [改进] #1777 台股三大法人 fetcher（`TwInstitutionalFetcher`）增加缓存防击穿：并发同 (市场, 日期) 调用合并为单次上游请求，保护 TWSE T86 ~3 req/5s 限流额度；不同 key 仍并行；新增并发单次抓取、不同 key 各抓一次、HTTP 错误 fail-open 回归测试。
+- [修复] 修复桌面端启动时 `.env` 中 `WEBUI_PORT` 与 Electron 自动选择端口不一致会导致窗口继续等待旧端口并连接超时的问题。
+- [修复] A 股个股分析遇到空 `belong_boards` 占位时会继续补查所属板块，关联板块模块在已有板块时稳定展示；对应涨跌幅缺失时只显示板块，不再输出占位涨跌幅。
+- [修复] 大盘复盘在 LLM 标题漂移或正文缺少板块段时，会从结构化 `sectors` 兜底渲染板块表，避免 Web 与推送报告偶发缺少板块主线。
+- [改进] AlphaSift 默认依赖 pin 更新到 `9f522747caafd3c0b1ddb7e14d5cf44c8580b6cf`，接入 wrapper 数据源 caller-side timeout、东财直连限速/抖动、策略目录元数据与新增防守策略；选股任务状态轮询遇到可恢复超时时改为提示后台任务仍会自动重试，`.env.example` 补充相关超时调优项，降低外部数据源卡住时触发 Web 30 秒等待超时的概率。
 
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->

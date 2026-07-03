@@ -698,6 +698,18 @@ function normalizeBackendHost(value, fallback = '') {
   return normalized || fallback;
 }
 
+function normalizeBackendBindHost(value, fallback = DESKTOP_BACKEND_DEFAULT_HOST) {
+  const host = normalizeBackendHost(value, fallback);
+  const lowerHost = host.toLowerCase();
+  if (lowerHost === '*') {
+    return '0.0.0.0';
+  }
+  if (lowerHost === '[::]') {
+    return '::';
+  }
+  return host;
+}
+
 function hasOwnValue(object, key) {
   return Object.prototype.hasOwnProperty.call(object || {}, key);
 }
@@ -804,15 +816,15 @@ function resolveBackendBindHost({
 } = {}) {
   const sourceHost = normalizeBackendHost(sourceEnv.WEBUI_HOST);
   if (sourceHost) {
-    return sourceHost;
+    return normalizeBackendBindHost(sourceHost, fallback);
   }
 
   const envFileHost = normalizeBackendHost(readEnvFileValue(envFile, 'WEBUI_HOST', sourceEnv));
-  return envFileHost || fallback;
+  return normalizeBackendBindHost(envFileHost || fallback, fallback);
 }
 
 function resolveDesktopConnectHost(bindHost) {
-  const host = normalizeBackendHost(bindHost, DESKTOP_BACKEND_DEFAULT_HOST);
+  const host = normalizeBackendBindHost(bindHost, DESKTOP_BACKEND_DEFAULT_HOST);
   if (PUBLIC_BIND_HOSTS.has(host.toLowerCase())) {
     return DESKTOP_BACKEND_DEFAULT_HOST;
   }
@@ -837,7 +849,7 @@ function buildBackendArgs({ host, port }) {
   return [
     '--serve-only',
     '--host',
-    normalizeBackendHost(host, DESKTOP_BACKEND_DEFAULT_HOST),
+    normalizeBackendBindHost(host, DESKTOP_BACKEND_DEFAULT_HOST),
     '--port',
     String(port),
   ];
@@ -852,7 +864,10 @@ function buildBackendEnvironment({
   sourceEnv = process.env,
 }) {
   const selectedPort = Number(port);
-  const selectedHost = normalizeBackendHost(host) || resolveBackendBindHost({ envFile, sourceEnv });
+  const selectedHost = normalizeBackendBindHost(
+    normalizeBackendHost(host) || resolveBackendBindHost({ envFile, sourceEnv }),
+    DESKTOP_BACKEND_DEFAULT_HOST
+  );
   const env = {
     ...sourceEnv,
     DSA_DESKTOP_MODE: 'true',
@@ -964,7 +979,7 @@ function ensureEnvFile(envPath) {
 }
 
 function findAvailablePort(startPort = 8000, endPort = 8100, host = DESKTOP_BACKEND_DEFAULT_HOST) {
-  const bindHost = normalizeBackendHost(host, DESKTOP_BACKEND_DEFAULT_HOST);
+  const bindHost = normalizeBackendBindHost(host, DESKTOP_BACKEND_DEFAULT_HOST);
   return new Promise((resolve, reject) => {
     const tryPort = (port) => {
       if (port > endPort) {
@@ -1148,7 +1163,10 @@ function startBackend({ port, envFile, dbPath, logDir, host = null }) {
   const backendPath = resolveBackendPath();
   backendStartError = null;
   const launchStartedAt = Date.now();
-  const bindHost = normalizeBackendHost(host) || resolveBackendBindHost({ envFile });
+  const bindHost = normalizeBackendBindHost(
+    normalizeBackendHost(host) || resolveBackendBindHost({ envFile }),
+    DESKTOP_BACKEND_DEFAULT_HOST
+  );
 
   const env = buildBackendEnvironment({ envFile, dbPath, logDir, port, host: bindHost });
 
