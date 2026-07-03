@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [修复] 台股（tw）市场阶段（`market_phase`）新增收盘集合竞价识别：`_CLOSING_AUCTION_WINDOW_MINUTES` 缺 `tw` 键时 `.get(market, 0)` 得零宽窗口，TWSE/TPEx 13:25–13:30 的 5 分钟收盘竞价此前永远无法判定为 `closing_auction`（收盘前一刻仍 `intraday`、13:30 直接 `postmarket`）；补 `"tw": 5` 修正，附阶段边界回归测试。仅 tw 加项，cn/hk/us 与 jp/kr 行为不变。
 - [新功能] 新增 AI 建议决策风格重评估预览接口与页面预览。
 - [文档] 更新 README 三语入口和市场支持边界，明确台股个股分析已支持 `.TW` / `.TWO` suffix、三大法人报告区块、TWD 标注与收盘竞价识别，同时保留台股股票池自动补全、大盘复盘和大盘红绿灯告警的未覆盖边界。
+- [修复] Web 大盘复盘结构化数据统一格式化成交额、指数点位、涨跌幅和高/低值，避免浮点长尾或缺失值 `0.00` 直接展示；同步更新 `MarketReviewReportView` 与 `HomePage` 回归断言（如 `3150.20`）。
+- [文档] 本次变更仅涉及 Web 展示层（`apps/dsa-web`）与相关前端测试，未改动模型名、provider、Base URL、LiteLLM、`src/services/image_stock_extractor.py` 或其它后端/配置迁移语义，若需回退可直接还原本次前端补丁；兼容边界与可回退路径见现有 LLM 配置文档（如 `docs/LLM_CONFIG_GUIDE*.md`）。
 
 ## [3.24.1] - 2026-06-28
 
