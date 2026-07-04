@@ -3240,6 +3240,10 @@
               "context_snapshot": {
                 "type": "object",
                 "description": "分析时上下文快照（JSON）"
+              },
+              "market_structure": {
+                "type": "object",
+                "description": "市场结构上下文（题材主线与个股市场位置信息，JSON）"
               }
             }
           }

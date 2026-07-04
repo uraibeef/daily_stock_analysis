@@ -35,6 +35,51 @@ class _FakeFetcherManager:
         )
 
 
+class _DownTrendFetcherManager:
+    def __init__(self) -> None:
+        self.sector_calls = 0
+        self.concept_calls = 0
+
+    def get_sector_rankings(self, n: int = 5):
+        self.sector_calls += 1
+        return (
+            [{"name": "通用设备", "change_pct": -1.8}],
+            [{"name": "旅游酒店", "change_pct": -2.1}],
+        )
+
+    def get_concept_rankings(self, n: int = 5):
+        self.concept_calls += 1
+        return (
+            [{"name": "机器人概念", "change_pct": 0.0}],
+            [{"name": "转基因", "change_pct": -2.0}],
+        )
+
+
+class _RecoverableFailureFetcherManager:
+    def __init__(self) -> None:
+        self.fail = True
+        self.sector_calls = 0
+        self.concept_calls = 0
+
+    def get_sector_rankings(self, n: int = 5):
+        self.sector_calls += 1
+        if self.fail:
+            raise RuntimeError("sector down")
+        return (
+            [{"name": "通用设备", "change_pct": -1.8}],
+            [{"name": "旅游酒店", "change_pct": -2.1}],
+        )
+
+    def get_concept_rankings(self, n: int = 5):
+        self.concept_calls += 1
+        if self.fail:
+            raise RuntimeError("concept down")
+        return (
+            [{"name": "机器人概念", "change_pct": 0.0}],
+            [{"name": "转基因", "change_pct": -2.0}],
+        )
+
+
 class _EmptyHotspotService:
     def get_hotspots(
         self,
@@ -134,6 +179,37 @@ def test_market_hotspot_service_bounds_ranking_fetches() -> None:
     assert fetcher.sector_calls == 1
     assert fetcher.concept_calls == 1
     assert any("timeout" in error for error in context["data_quality"]["errors"])
+
+
+def test_market_hotspot_service_marks_flat_down_rankings_as_ok_without_active_themes() -> None:
+    service = MarketHotspotService(fetcher_manager=_DownTrendFetcherManager())
+
+    context = service.get_hotspots(market="cn", trade_date="2026-07-04")
+
+    assert context["status"] == "ok"
+    assert context["active_themes"] == []
+    assert context["theme_breadth"]["active_count"] == 0
+    assert context["data_quality"]["missing_fields"] == []
+    assert not context["data_quality"]["errors"]
+
+
+def test_market_hotspot_service_recovers_after_failed_cache_ttl_expiry() -> None:
+    fetcher = _RecoverableFailureFetcherManager()
+    service = MarketHotspotService(
+        fetcher_manager=fetcher,
+        failure_cache_ttl_seconds=0.0,
+    )
+
+    failed = service.get_hotspots(market="cn", trade_date="2026-07-04")
+    assert failed["status"] == "unknown"
+
+    fetcher.fail = False
+    recovered = service.get_hotspots(market="cn", trade_date="2026-07-04")
+
+    assert recovered["status"] == "ok"
+    assert recovered["active_themes"] == []
+    assert fetcher.sector_calls == 2
+    assert fetcher.concept_calls == 2
 
 
 def test_market_structure_service_reuses_fundamental_rankings_for_theme_layer() -> None:

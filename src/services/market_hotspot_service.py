@@ -12,6 +12,7 @@ import logging
 import copy
 import threading
 from datetime import date
+import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from data_provider import DataFetcherManager
@@ -31,6 +32,7 @@ from src.schemas.market_structure import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_RANKING_FETCH_TIMEOUT_SECONDS = 3.0
+DEFAULT_RANKING_CACHE_FAILURE_TTL_SECONDS = 30.0
 
 
 class MarketHotspotService:
@@ -40,10 +42,19 @@ class MarketHotspotService:
         self,
         fetcher_manager: Optional[DataFetcherManager] = None,
         ranking_fetch_timeout_seconds: Optional[float] = None,
+        failure_cache_ttl_seconds: Optional[float] = None,
     ) -> None:
         self.fetcher_manager = fetcher_manager or DataFetcherManager()
         self._ranking_fetch_timeout_seconds = ranking_fetch_timeout_seconds
-        self._hotspots_cache: Dict[Tuple[str, Optional[str], int], Dict[str, Any]] = {}
+        self._failure_cache_ttl_seconds = self._coerce_cache_ttl(
+            DEFAULT_RANKING_CACHE_FAILURE_TTL_SECONDS
+            if failure_cache_ttl_seconds is None
+            else failure_cache_ttl_seconds
+        )
+        self._hotspots_cache: Dict[
+            Tuple[str, Optional[str], int],
+            Dict[str, Any],
+        ] = {}
         self._hotspots_cache_lock = threading.Lock()
 
     def get_hotspots(
@@ -126,12 +137,14 @@ class MarketHotspotService:
             missing_fields.append("concept_rankings")
 
         has_any_ranking = bool(leading_industries or leading_concepts or lagging_themes)
-        if active_themes and not missing_fields and not errors:
+        is_data_complete = not missing_fields and not errors
+        if is_data_complete:
             status = "ok"
-        elif has_any_ranking:
-            status = "partial"
         else:
-            status = "unknown"
+            if has_any_ranking:
+                status = "partial"
+            else:
+                status = "unknown"
 
         context = MarketThemeContext(
             status=status,
@@ -224,16 +237,52 @@ class MarketHotspotService:
     ) -> Optional[Dict[str, Any]]:
         with self._hotspots_cache_lock:
             cached = self._hotspots_cache.get(cache_key)
-            return copy.deepcopy(cached) if cached is not None else None
+            if not isinstance(cached, dict):
+                return None
+
+            payload = cached.get("payload")
+            if not isinstance(payload, dict):
+                return None
+
+            expires_at = cached.get("expires_at")
+            if isinstance(expires_at, (int, float)) and expires_at < time.time():
+                self._hotspots_cache.pop(cache_key, None)
+                return None
+
+            return copy.deepcopy(payload)
 
     def _store_cached_hotspots(
         self,
         cache_key: Tuple[str, Optional[str], int],
         payload: Dict[str, Any],
     ) -> Dict[str, Any]:
+        if payload.get("status") == "ok":
+            expires_at = None
+        else:
+            status_error = payload.get("data_quality", {}).get("errors", [])
+            has_missing = bool(payload.get("data_quality", {}).get("missing_fields", []))
+            if status_error or has_missing or payload.get("status") != "ok":
+                failure_ttl = self._failure_cache_ttl_seconds
+                if failure_ttl <= 0:
+                    return copy.deepcopy(payload)
+                expires_at = time.time() + failure_ttl
+            else:
+                expires_at = None
+
+        entry: Dict[str, Any] = {
+            "payload": copy.deepcopy(payload),
+            "expires_at": expires_at,
+        }
         with self._hotspots_cache_lock:
-            self._hotspots_cache[cache_key] = copy.deepcopy(payload)
+            self._hotspots_cache[cache_key] = copy.deepcopy(entry)
         return copy.deepcopy(payload)
+
+    @staticmethod
+    def _coerce_cache_ttl(value: Any) -> float:
+        try:
+            return max(0.0, float(value))
+        except (TypeError, ValueError):
+            return DEFAULT_RANKING_CACHE_FAILURE_TTL_SECONDS
 
     def _fetch_rankings(
         self,
