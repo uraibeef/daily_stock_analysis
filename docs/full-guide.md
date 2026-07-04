@@ -898,6 +898,8 @@ P6 只做文档与配置可见性收口，不新增 pack runtime、不新增 pac
 
 首版市场结构由 DSA 原生服务基于 `DataFetcherManager.get_sector_rankings()`、`get_concept_rankings()` 和 `fundamental_context.belong_boards` 生成，不依赖 AlphaSift runtime。AlphaSift 中已有的热点详情、发酵路线、成分股和 leader stocks 可作为后续可选数据源迁移，但在未迁移前不会被普通个股分析隐式调用。缺少成分股或 leader 证据时，`stock_role` 默认保持 `follower/edge/unknown`，并在 `missing_fields` 中标记 `hotspot_constituents`、`leader_stocks`，避免把普通关联股误写成题材龙头。
 
+兼容性边界：`market_structure_context` 中的 provider / model 快照字段（含 `model_used`、`market_structure_context.*.source.provider` 等）仅用于历史回溯和页面展示，不构成 LLM provider 路由、`base URL`、`provider/model` 运行时配置输入；不会触发 `.env` 配置清理、回写、迁移或静默变更。
+
 普通 LLM、single Agent 和 multi-agent prompt 会注入市场结构低敏摘要；DecisionSignal 自动提取会把 `primary_theme`、`theme_phase`、`stock_role`、版本号和风险标签写入 metadata，不改变主字段、去重键或生命周期规则。Web 报告页在概览后展示“市场位置”卡片，分别呈现大盘题材层和个股位置层；旧历史记录缺少该字段时不展示。非 A 股市场首版返回 `not_supported`，不影响原有报告。
 
 #### 盘中决策护栏与质量校验（Issue #1386 P5）

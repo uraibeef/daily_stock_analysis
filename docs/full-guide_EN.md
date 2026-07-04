@@ -764,6 +764,8 @@ Stock analysis now builds a low-sensitivity `market_structure_context` and expos
 
 The first version is DSA-native: it uses `DataFetcherManager.get_sector_rankings()`, `get_concept_rankings()`, and `fundamental_context.belong_boards`. It does not require AlphaSift at runtime. AlphaSift hotspot details, route timelines, constituents, and leader stocks can be migrated later as optional sources; until then, missing constituent/leader evidence is explicit and the stock role stays conservative (`follower`, `edge`, or `unknown`). Non-A-share markets return `not_supported`.
 
+Compatibility boundary: provider/model snapshot fields in this change (including `model_used` and market structure source provider markers) are display/history metadata only. They do not participate in runtime provider routing, `base URL`, model selection, `.env` config cleanup, or migration/overwrite logic.
+
 Regular LLM, single Agent, and multi-agent prompts receive the low-sensitivity summary. DecisionSignal extraction writes `primary_theme`, `theme_phase`, `stock_role`, contract versions, and risk tags into metadata without changing primary fields or deduplication keys. The Web report page shows a market-position card after the overview; older reports without this field simply omit the card.
 
 ### Intraday Decision Guardrails and Quality Checks (Issue #1386 P5)

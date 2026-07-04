@@ -41,6 +41,7 @@ git diff --name-only "$BASE_REF"..HEAD
 - 文件总数 / 变更行数（建议粘贴 `git diff --stat "$BASE_REF"..HEAD`）：
 - 文件清单（按 `git diff --name-only "$BASE_REF"..HEAD` 全量逐项列出）：
 - 受影响面（按实际变更逐项列出）：
+  - 建议逐项标注 backend / schema / service / API / web / tests / docs / governance / config 等类别
   - backend / agent / schema / service / API
   - web / desktop（若有）
   - docs
@@ -133,6 +134,8 @@ python -m pytest -m "not network"
   *(EN) If this PR depends on a specific runtime or pinned dependency window (for example a LiteLLM version range, OpenAI-compatible routing, or YAML alias behavior), state the compatibility window you verified and which code paths were covered.)*
 - 若本 PR 触及运行时配置保存、清理、迁移或回填逻辑，请明确说明旧配置是否会被自动改写、清空、迁移或保持不变，以及用户如何恢复原行为。  
   *(EN) If this PR touches runtime config save/cleanup/migration/backfill logic, explicitly describe whether existing config is rewritten, cleared, migrated, or left intact, and how users can restore the previous behavior.)*
+- 若本 PR 暴露了 `provider` / `model_used` 等业务快照字段，请明确说明其仅用于历史/展示语义，是否会影响运行时 provider 路由、model 名称、`base URL`、`OPENAI_BASE_URL`、配置保存/迁移/清理路径，并给出未影响的证明。
+  *(EN) If this PR exposes fields such as `provider` or `model_used` as data snapshots, explicitly confirm whether they are presentation-only historical metadata and do not affect runtime provider routing, model names, `base URL`, `OPENAI_BASE_URL`, config save/cleanup/migration paths, and state the evidence for non-impact.)*
 - 若本 PR **未触及** provider/model/base URL 或运行时配置保存/清理/迁移逻辑（本条仅作为声明），请明确写：`本 PR 未变更 provider/model/base URL、运行时配置清理迁移语义；历史配置保持不变；回滚方式为 revert 本提交。`
 
 ## Rollback Plan
