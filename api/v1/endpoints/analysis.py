@@ -481,7 +481,7 @@ def _handle_sync_analysis(
 
         # 构建报告结构
         report_data = result.get("report", {})
-        context_snapshot, fundamental_snapshot = _load_sync_fundamental_sources(
+        context_snapshot, fundamental_snapshot, raw_result_snapshot = _load_sync_fundamental_sources(
             query_id=query_id,
             stock_code=result.get("stock_code", stock_code),
         )
@@ -492,6 +492,7 @@ def _handle_sync_analysis(
             result.get("stock_name"),
             context_snapshot=context_snapshot,
             fallback_fundamental_payload=fundamental_snapshot,
+            fallback_raw_result_payload=raw_result_snapshot or result,
         )
 
         return AnalysisResultResponse(
@@ -959,11 +960,11 @@ def _build_task_analysis_result(task: Any) -> AnalysisResultResponse:
     report_enriched = False
 
     if isinstance(report_data, dict) and stock_code and query_id:
-        context_snapshot, fundamental_snapshot = _load_sync_fundamental_sources(
+        context_snapshot, fundamental_snapshot, raw_result_snapshot = _load_sync_fundamental_sources(
             query_id=query_id,
             stock_code=stock_code,
         )
-        if context_snapshot is not None or fundamental_snapshot is not None:
+        if context_snapshot is not None or fundamental_snapshot is not None or raw_result_snapshot is not None:
             try:
                 report = _build_analysis_report(
                     _prepare_report_for_task_enrichment(
@@ -975,6 +976,7 @@ def _build_task_analysis_result(task: Any) -> AnalysisResultResponse:
                     payload.get("stock_name") or getattr(task, "stock_name", None),
                     context_snapshot=context_snapshot,
                     fallback_fundamental_payload=fundamental_snapshot,
+                    fallback_raw_result_payload=raw_result_snapshot or payload,
                 )
                 payload["report"] = report.model_dump()
                 report_enriched = True
@@ -1251,9 +1253,9 @@ def get_analysis_status(task_id: str) -> TaskStatus:
 def _load_sync_fundamental_sources(
     query_id: str,
     stock_code: str,
-) -> tuple[Optional[Any], Optional[Dict[str, Any]]]:
+) -> tuple[Optional[Any], Optional[Dict[str, Any]], Optional[Any]]:
     """
-    Load context_snapshot and fallback fundamental snapshot for sync analyze response.
+    Load report enrichment payloads for sync analyze response.
     """
     try:
         from src.storage import DatabaseManager
@@ -1261,14 +1263,17 @@ def _load_sync_fundamental_sources(
         db = DatabaseManager.get_instance()
         records = db.get_analysis_history(query_id=query_id, code=stock_code, limit=1)
         context_snapshot = None
+        raw_result_snapshot = None
         if records:
-            context_snapshot = parse_json_field(getattr(records[0], "context_snapshot", None))
+            latest_record = records[0]
+            context_snapshot = parse_json_field(getattr(latest_record, "context_snapshot", None))
+            raw_result_snapshot = parse_json_field(getattr(latest_record, "raw_result", None))
 
         fallback_fundamental = db.get_latest_fundamental_snapshot(
             query_id=query_id,
             code=stock_code,
         )
-        return context_snapshot, fallback_fundamental
+        return context_snapshot, fallback_fundamental, raw_result_snapshot
     except Exception as e:
         logger.debug(
             "load sync fundamental sources failed (fail-open): query_id=%s stock_code=%s err=%s",
@@ -1276,7 +1281,7 @@ def _load_sync_fundamental_sources(
             stock_code,
             e,
         )
-        return None, None
+        return None, None, None
 
 
 def _stringify_report_strategy_value(value: Any) -> Optional[str]:
@@ -1294,6 +1299,7 @@ def _build_analysis_report(
         stock_name: Optional[str] = None,
         context_snapshot: Optional[Any] = None,
         fallback_fundamental_payload: Optional[Dict[str, Any]] = None,
+        fallback_raw_result_payload: Optional[Any] = None,
 ) -> AnalysisReport:
     """
     构建符合 API 规范的分析报告
@@ -1305,6 +1311,7 @@ def _build_analysis_report(
         stock_name: 股票名称
         context_snapshot: 上下文快照（可选）
         fallback_fundamental_payload: 基本面快照 payload（可选）
+        fallback_raw_result_payload: 原始分析结果 payload（可选）
         
     Returns:
         AnalysisReport: 结构化的分析报告
@@ -1400,10 +1407,16 @@ def _build_analysis_report(
         context_snapshot=context_snapshot,
         fallback_fundamental_payload=fallback_fundamental_payload,
     )
-    market_structure = extract_market_structure_detail_field(
-        context_snapshot,
-        raw_result_data or details_data,
-    )
+    market_structure = None
+    for raw_candidate in (fallback_raw_result_payload, raw_result_data, details_data):
+        if raw_candidate is None:
+            continue
+        market_structure = extract_market_structure_detail_field(
+            context_snapshot,
+            raw_candidate,
+        )
+        if market_structure is not None:
+            break
     analysis_context_pack_overview = extract_analysis_context_pack_overview(context_snapshot)
     api_context_snapshot = sanitize_context_snapshot_for_api(context_snapshot)
     details = None
