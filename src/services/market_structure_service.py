@@ -112,10 +112,23 @@ class MarketStructureService:
         )
         market_theme_context = MarketThemeContext.model_validate(market_theme_payload)
 
+        related_sector_rankings = self._merge_rankings_for_board_matching(
+            sector_rankings=sector_rankings,
+            leading_items=market_theme_payload.get("leading_industries", []),
+            lagging_items=market_theme_payload.get("lagging_themes", []),
+            lagging_allowed_sources={"industry", "unknown"},
+        )
+        related_concept_rankings = self._merge_rankings_for_board_matching(
+            sector_rankings=concept_rankings,
+            leading_items=market_theme_payload.get("leading_concepts", []),
+            lagging_items=market_theme_payload.get("lagging_themes", []),
+            lagging_allowed_sources={"concept", "unknown"},
+        )
+
         related_boards = self._build_related_boards(
             board_details.get("belong_boards") or [],
-            sector_rankings=sector_rankings,
-            concept_rankings=concept_rankings,
+            sector_rankings=related_sector_rankings,
+            concept_rankings=related_concept_rankings,
         )
         primary_theme = self._infer_primary_theme(market_theme_payload, related_boards)
         stock_role = self._infer_stock_role(primary_theme, related_boards)
@@ -244,6 +257,42 @@ class MarketStructureService:
             return "concept", None
         return "industry", None
 
+    @staticmethod
+    def _merge_rankings_for_board_matching(
+        *,
+        sector_rankings: Any,
+        leading_items: Any,
+        lagging_items: Any,
+        lagging_allowed_sources: set[str],
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        top: List[Dict[str, Any]] = []
+        bottom: List[Dict[str, Any]] = []
+
+        def append_if_dict(target: List[Dict[str, Any]], item: Any) -> None:
+            if not isinstance(item, dict):
+                return
+            name = item.get("name")
+            if not name:
+                return
+            target.append(dict(item))
+
+        if isinstance(sector_rankings, dict):
+            for item in sector_rankings.get("top", []):
+                append_if_dict(top, item)
+            for item in sector_rankings.get("bottom", []):
+                append_if_dict(bottom, item)
+
+        for item in leading_items if isinstance(leading_items, list) else []:
+            append_if_dict(top, item)
+
+        for item in lagging_items if isinstance(lagging_items, list) else []:
+            source = str(item.get("source") or "unknown").strip().lower()
+            if source not in lagging_allowed_sources:
+                continue
+            append_if_dict(bottom, item)
+
+        return {"top": top, "bottom": bottom}
+
     def _infer_primary_theme(
         self,
         market_theme_payload: Dict[str, Any],
@@ -254,7 +303,12 @@ class MarketStructureService:
 
         related_names = {board.name for board in related_boards}
         candidates: List[Dict[str, Any]] = []
-        for field in ("active_themes", "leading_concepts", "leading_industries"):
+        for field in (
+            "active_themes",
+            "leading_concepts",
+            "leading_industries",
+            "lagging_themes",
+        ):
             value = market_theme_payload.get(field)
             if isinstance(value, list):
                 candidates.extend(item for item in value if isinstance(item, dict))

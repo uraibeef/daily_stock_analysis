@@ -131,6 +131,24 @@ const TEXT = {
   },
 } as const;
 
+const RISK_TAG_TEXT = {
+  zh: {
+    theme_data_partial: '题材主线数据不完整',
+    stock_theme_evidence_partial: '个股板块未匹配到市场题材榜单，个股位置按降级证据处理',
+    board_membership_missing: '缺少个股所属板块证据，无法判断题材位置',
+  },
+  en: {
+    theme_data_partial: 'Market theme data is incomplete',
+    stock_theme_evidence_partial: 'Stock board did not match theme rankings',
+    board_membership_missing: 'Stock board membership evidence is missing',
+  },
+  ko: {
+    theme_data_partial: '테마 데이터가 불완전합니다',
+    stock_theme_evidence_partial: '종목 보드가 테마 랭킹과 일치하지 않았습니다',
+    board_membership_missing: '종목 보드 근거가 없어 테마 위치를 판단할 수 없습니다',
+  },
+} as const;
+
 const formatItem = (item: RankedThemeItem): string => {
   if (typeof item.changePct === 'number') {
     return `${item.name} ${item.changePct > 0 ? '+' : ''}${item.changePct.toFixed(2)}%`;
@@ -177,7 +195,14 @@ export const MarketStructureCard: React.FC<MarketStructureCardProps> = ({ contex
   const stockRole = (stockPosition.stockRole || 'unknown') as MarketStructureStockRole;
   const themePhaseLabel = text.phase[themePhase] || stockPosition.themePhase || text.phase.unknown;
   const stockRoleLabel = text.role[stockRole] || stockPosition.stockRole || text.role.unknown;
-  const riskTags = valueList(stockPosition.riskTags?.map((tag) => tag.message || tag.code));
+  const riskTags = valueList(
+    stockPosition.riskTags?.map(
+      (tag) =>
+        (RISK_TAG_TEXT[reportLanguage] as Record<string, string>)[tag.code]
+        || tag.message
+        || tag.code,
+    ),
+  );
   const missingFields = valueList([
     ...(stockPosition.missingFields || []),
     ...(marketTheme.dataQuality?.missingFields || []),

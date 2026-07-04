@@ -55,6 +55,7 @@ const context: MarketStructureContext = {
     themePhase: 'accelerating',
     riskTags: [
       { code: 'theme_data_partial', message: '题材主线数据不完整' },
+      { code: 'stock_theme_evidence_partial', message: '个股板块未匹配到市场题材榜单，个股位置按降级证据处理' },
     ],
     missingFields: ['hotspot_constituents', 'leader_stocks'],
   },
@@ -84,6 +85,9 @@ describe('MarketStructureCard', () => {
     expect(screen.getByText('Accelerating')).toBeVisible();
     expect(screen.getByText('Follower')).toBeVisible();
     expect(screen.getByText('Missing Evidence')).toBeVisible();
+    expect(screen.getByText('Market theme data is incomplete')).toBeVisible();
+    expect(screen.getByText('Stock board did not match theme rankings')).toBeVisible();
+    expect(screen.queryByText('题材主线数据不完整')).not.toBeInTheDocument();
   });
 
   it('renders Korean labels', () => {
@@ -94,6 +98,8 @@ describe('MarketStructureCard', () => {
     expect(screen.getByText('종목 포지션 레이어')).toBeVisible();
     expect(screen.getByText('가속')).toBeVisible();
     expect(screen.getByText('추종')).toBeVisible();
+    expect(screen.getByText('테마 데이터가 불완전합니다')).toBeVisible();
+    expect(screen.getByText('종목 보드가 테마 랭킹과 일치하지 않았습니다')).toBeVisible();
   });
 
   it('does not render unsupported or invalid context', () => {

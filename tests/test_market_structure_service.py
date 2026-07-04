@@ -407,6 +407,32 @@ def test_market_structure_service_keeps_stock_layer_partial_without_ranking_evid
     assert {tag["code"] for tag in position["risk_tags"]} == {"stock_theme_evidence_partial"}
 
 
+def test_market_structure_service_uses_lagging_themes_for_board_match() -> None:
+    service = MarketStructureService(fetcher_manager=_DownTrendFetcherManager())
+    fundamental_context = {
+        "market": "cn",
+        "belong_boards": [{"name": "转基因", "type": "概念"}],
+    }
+
+    context = service.build_context(
+        code="300024",
+        stock_name="转基因",
+        market="cn",
+        fundamental_context=fundamental_context,
+        trade_date="2026-07-04",
+    )
+
+    position = context["stock_market_position"]
+    assert position["status"] == "ok"
+    assert position["primary_theme"]["name"] == "转基因"
+    assert position["theme_phase"] == "cooling"
+    assert position["stock_role"] == "follower"
+    assert position["related_boards"][0]["name"] == "转基因"
+    assert position["related_boards"][0]["source"] == "concept"
+    assert position["related_boards"][0]["change_pct"] == -2.0
+    assert "theme_ranking_match" not in position["missing_fields"]
+
+
 def test_market_structure_service_prefers_ranked_related_board_fallback() -> None:
     service = MarketStructureService(
         fetcher_manager=_FakeFetcherManager(),
