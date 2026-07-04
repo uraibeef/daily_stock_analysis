@@ -197,7 +197,10 @@ class MarketStructureService:
             if not name:
                 continue
             board_type = self._optional_text(board.get("type"))
-            source: ThemeRankSource = "concept" if self._is_concept_type(board_type) else "industry"
+            is_concept = self._is_concept_type(board_type) or (
+                board_type is None and self._is_concept_type(name)
+            )
+            source: ThemeRankSource = "concept" if is_concept else "industry"
             ranking_payload = concept_rankings if source == "concept" else sector_rankings
             ranking_item = self._find_ranking_item(name, ranking_payload)
             related.append(

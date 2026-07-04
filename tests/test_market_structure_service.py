@@ -32,6 +32,19 @@ class _FakeFetcherManager:
         )
 
 
+class _EmptyHotspotService:
+    def get_hotspots(self, *, market: str, trade_date=None, limit: int = 5):
+        return {
+            "status": "ok",
+            "market": market,
+            "trade_date": trade_date,
+            "active_themes": [],
+            "leading_industries": [],
+            "leading_concepts": [],
+            "lagging_themes": [],
+        }
+
+
 def test_market_hotspot_service_builds_theme_context_from_dsa_rankings() -> None:
     service = MarketHotspotService(fetcher_manager=_FakeFetcherManager())
 
@@ -103,6 +116,46 @@ def test_market_structure_service_combines_market_and_stock_layers() -> None:
     assert position["theme_phase"] == "accelerating"
     assert position["stock_role"] == "follower"
     assert "leader_stocks" in position["missing_fields"]
+
+
+def test_market_structure_service_infers_concept_board_from_missing_type_name() -> None:
+    service = MarketStructureService(
+        fetcher_manager=_FakeFetcherManager(),
+        hotspot_service=_EmptyHotspotService(),
+    )
+    fundamental_context = {
+        "market": "cn",
+        "belong_boards": [{"name": "机器人概念"}],
+        "concept_boards": {
+            "status": "ok",
+            "data": {
+                "top": [{"name": "机器人概念", "rank": 1, "change_pct": 4.2}],
+                "bottom": [],
+            },
+        },
+        "boards": {
+            "status": "ok",
+            "data": {
+                "top": [{"name": "通用设备", "rank": 2, "change_pct": 2.1}],
+                "bottom": [],
+            },
+        },
+    }
+
+    context = service.build_context(
+        code="300024",
+        stock_name="机器人",
+        market="cn",
+        fundamental_context=fundamental_context,
+        trade_date="2026-07-04",
+    )
+
+    position = context["stock_market_position"]
+    assert position["status"] == "ok"
+    assert position["primary_theme"]["source"] == "concept"
+    assert position["primary_theme"]["change_pct"] == 4.2
+    assert position["theme_phase"] == "accelerating"
+    assert position["related_boards"][0]["source"] == "concept"
 
 
 def test_market_structure_service_keeps_stock_layer_partial_without_ranking_evidence() -> None:
