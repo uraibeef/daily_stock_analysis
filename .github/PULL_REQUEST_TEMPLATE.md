@@ -23,9 +23,10 @@ For English contributors: please fill in English. All fields marked (EN) accept 
 *(EN) List the modules and files changed in this PR.*
 
 > 注意：请按实际 `git diff` 全量列出文件范围（建议注明文件总数），避免遗漏文档/后端/API/前端文件导致描述不一致。**提交前先执行并粘贴命令原始输出**，不允许手工改写：
-> - `CURRENT_HEAD=$(git rev-parse --short HEAD)`
-> - `git diff --stat $(git merge-base HEAD origin/main)..$CURRENT_HEAD`
-> - `git diff --name-only $(git merge-base HEAD origin/main)..$CURRENT_HEAD`
+> - `HEAD_SHORT=$(git rev-parse --short HEAD)`
+> - `BASE_REF=$(git merge-base HEAD origin/main)`
+> - `git diff --stat "$BASE_REF"..$HEAD_SHORT`
+> - `git diff --name-only "$BASE_REF"..$HEAD_SHORT`
 
 > 若本 PR 修改了 `.github/PULL_REQUEST_TEMPLATE.md`、`.github/copilot-instructions.md`、`AGENTS.md`、`.github/instructions/*` 或 `.claude/skills/**` 等协作与治理文件，请补充“变更原因 + 影响面 + 回滚方式（默认 revert）”到 Summary / Compatibility / Rollback，避免 Scope 与描述不一致。
 
@@ -45,6 +46,9 @@ git diff --name-only "$BASE_REF"..HEAD
 - 文件总数 / 变更行数（建议粘贴 `git diff --stat "$BASE_REF"..HEAD`）：
 - 文件清单（按 `git diff --name-only "$BASE_REF"..HEAD` 全量逐项列出）：
   - 请直接粘贴命令原始输出，不得删减空行。若发现遗漏，请同步补齐后再提交。
+- 必须同时给出 `Head`/`Base` 的原始值：
+  - Head：`git rev-parse --short HEAD`
+  - Base：`git merge-base HEAD origin/main`
 - 受影响面（按实际变更逐项列出）：
   - 建议逐项标注 backend / schema / service / API / web / tests / docs / governance / config 等类别
   - backend / agent / schema / service / API
@@ -146,6 +150,10 @@ python -m pytest -m "not network"
   - 判定结果：`true-impact` 或 `false-positive`
   - 对应回滚方案（误报可写“无 runtime 变更，revert 本 PR 即可”）
   - 若为误报，请给出无配置迁移/无路由变更的可核验依据（如未修改 config registry、路由入口、迁移脚本等）。
+  - 若结论为 `false-positive`，请至少补充以下证据项：
+    - 受影响 runtime config/migration 路径：`未改`
+    - 已审核文件：`config registry / 路由入口 / migration 脚本`（可写“未改及未命中”）
+    - `provider` / `model_used`、`base URL`、路由快照字段仅为历史展示语义时，请明确写明“仅展示、不影响运行时路由；未改 model/provider/base URL/OPENAI_* 相关配置持久化逻辑（附证据）”。
   - 建议按如下模板直接复用（便于审查回溯）：
     - 风险来源：`<tools/rule-id>`
     - 命中路径：`<文件路径1> -> <调用路径>`
