@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { chromium, expect, test, type TestInfo } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -199,8 +199,55 @@ function renderMarketStructureCardHtml(value: MarketStructureContext): string {
   `;
 }
 
+function isMissingPlaywrightBrowser(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("Executable doesn't exist");
+}
+
+async function attachDesktopScreenshotArtifact(artifact: string, testInfo: TestInfo): Promise<void> {
+  let browser;
+  try {
+    browser = await chromium.launch();
+  } catch (error) {
+    if (!isMissingPlaywrightBrowser(error)) {
+      throw error;
+    }
+    const notePath = testInfo.outputPath('market-structure-card-screenshot-skipped.txt');
+    fs.writeFileSync(
+      notePath,
+      [
+        'Playwright Chromium is not installed in this environment, so PNG capture was skipped.',
+        'The HTML artifact is still generated and can be opened to inspect the MarketStructureCard visual state.',
+      ].join('\n'),
+    );
+    await testInfo.attach('market-structure-card-screenshot-skipped', {
+      path: notePath,
+      contentType: 'text/plain',
+    });
+    return;
+  }
+
+  try {
+    const page = await browser.newPage({
+      locale: 'zh-CN',
+      viewport: { width: 1280, height: 900 },
+    });
+    await page.setContent(artifact, { waitUntil: 'domcontentloaded' });
+    const card = page.getByTestId('market-structure-visual-card');
+    await expect(card).toBeVisible();
+
+    const screenshotPath = testInfo.outputPath('market-structure-card-desktop.png');
+    await card.screenshot({ path: screenshotPath });
+    await testInfo.attach('market-structure-card-desktop-png', {
+      path: screenshotPath,
+      contentType: 'image/png',
+    });
+  } finally {
+    await browser.close();
+  }
+}
+
 test.describe('MarketStructureCard visual evidence', () => {
-  test('writes a desktop mock report card artifact with market structure data', async ({ browserName }, testInfo) => {
+  test('writes desktop mock report card artifacts with market structure data', async ({ browserName }, testInfo) => {
     const styles = loadBuiltStyles();
     const markup = renderMarketStructureCardHtml(context);
 
@@ -225,9 +272,11 @@ test.describe('MarketStructureCard visual evidence', () => {
 
     const artifactPath = testInfo.outputPath('market-structure-card-desktop.html');
     fs.writeFileSync(artifactPath, artifact);
+
     await testInfo.attach('market-structure-card-desktop-html', {
       path: artifactPath,
       contentType: 'text/html',
     });
+    await attachDesktopScreenshotArtifact(artifact, testInfo);
   });
 });
