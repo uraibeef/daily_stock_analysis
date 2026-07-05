@@ -32,6 +32,8 @@ For English contributors: please fill in English. All fields marked (EN) accept 
 - 文件清单（必填）：
   - `git diff --name-only --diff-filter=ACMRDTUXB $(git merge-base origin/main HEAD) HEAD`
 
+请在正文按上述命令顺序原样贴出三段结果，提交前必须确保与当前 PR 正文头尾一致且不复用旧值；若有追加 commit，需重复重算并覆盖旧数据。
+
 请直接粘贴上述命令输出，不得截断。若 PR 在提交周期内有新增 commit，提交说明前必须重算并覆盖旧值（禁止沿用历史头信息）。
 请按受影响改动面说明本次影响范围（如 backend/web/api/docs/治理资产等），包含 governance 文件时请同步解释变更动机与影响面。
 
@@ -105,6 +107,7 @@ For English contributors: please fill in English. All fields marked (EN) accept 
         | api/v1/endpoints/analysis.py | provider/model/base_url | False-positive（文档说明） | 无 | 回归原有配置链路 |
         | docs/... | model_used | False-positive（展示字段） | 无 | revert 即可恢复 |
         ```
+    - 若同一语句出现在模板、文档、测试、mock 或展示字段中，请在表中明确写明 `false-positive`，并说明为何不触发运行时迁移或 provider/model/base URL 加载链路。
   - 请确认命中源是否属于以下非运行时改动：仅模板文本、注释、测试、文档、单测 mock；若是 false positive 请在下方逐条列明“文件-命中文本-判定依据”。
     - 常见非运行时命中示例：`api_spec.json` 中服务器 URL 示例、文档中的配置说明、PR/治理模板描述、测试 mock/fixture、报告展示字段说明。
   - 若存在运行时影响或兼容风险，请同步列出“旧配置迁移路径（含回退步骤）”与验证依据（例如回归测试、CI 结果或本地复现命令）。
