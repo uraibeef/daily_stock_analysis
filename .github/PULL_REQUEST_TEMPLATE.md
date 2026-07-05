@@ -22,9 +22,10 @@ For English contributors: please fill in English. All fields marked (EN) accept 
 请按实际 `git diff` 全量列出本次变更的模块与文件范围（不得遗漏文件名，建议以 `git diff --name-only` 输出为准）。
 
 - 文件总数（必填）：
+  - `git diff --name-only --diff-filter=ACMRDTUXB $(git merge-base origin/main HEAD) HEAD | wc -l`
 - 文件清单（必填，建议按 PR base 与 Head 的差异输出）：
-  - `git diff --name-only <pr-base-commit> HEAD`（如 base 为 `main`：`git diff --name-only $(git merge-base origin/main HEAD) HEAD`）
-  - 
+  - `git diff --name-only --diff-filter=ACMRDTUXB $(git merge-base origin/main HEAD) HEAD`（如 base 为 `main`：`git diff --name-only --diff-filter=ACMRDTUXB $(git merge-base origin/main HEAD) HEAD`）
+  - 实际填充时请粘贴完整输出，不得截断；请对照该命令再次确认是否有 `.github/PULL_REQUEST_TEMPLATE.md`、`docs/architecture/api_spec.json`、`apps/dsa-web/src/utils/chatFollowUp.ts`、`src/services/decision_signal_service.py`、测试文件等遗漏条目。
 
 若本 PR 包含 `.github/**`、`AGENTS.md`、`CLAUDE.md`、`.github/instructions/**`、`.claude/skills/**` 等协作与治理文件，请补充“变更原因 + 影响面 + 回滚方式（默认 revert）”。
 并补充该类文件的治理资产验证命令与结果（至少包含 `python scripts/check_ai_assets.py` 的结果）。
@@ -52,6 +53,8 @@ For English contributors: please fill in English. All fields marked (EN) accept 
 - 复现命令（示例）：
   - `cd apps/dsa-web && npx playwright test e2e/smoke.spec.ts --grep "settings page"`
 - 无法截图时需写明原因与可复现替代证据。
+  - 本轮需覆盖页面：受影响报告页（例如 `report detail / history / 市场结构卡片`）、首页或设置页关键状态视图（若有）；
+  - 不可用真实历史报告时，请补充可复用的 mock 页（含 mock 数据）或 Actions artifact 链接，并在 PR 评论中给出复现步骤与截图入口。
 
 ## Verification Commands And Results
 
@@ -76,7 +79,9 @@ For English contributors: please fill in English. All fields marked (EN) accept 
     - 是否为 false positive（是 / 否）
     - 旧行为是否有静默清理或迁移语义影响（有 / 无）
     - 回滚方案与验证依据
-- 若仅为展示字段（如历史快照元数据）改动，请在此明确写明：历史展示字段不影响运行时调用路径、持久化清理与迁移。
+  - 请确认命中源是否属于以下非运行时改动：仅模板文本、注释、测试、文档、单测 mock；若是 false positive 请在下方逐条列明“文件-命中文本-判定依据”。
+  - 若存在运行时影响或兼容风险，请同步列出“旧配置迁移路径（含回退步骤）”与验证依据（例如回归测试、CI 结果或本地复现命令）。
+  - 若仅为展示字段（如历史快照元数据）改动，请在此明确写明：历史展示字段不影响运行时调用路径、持久化清理与迁移。
 
 ## Rollback Plan
 
