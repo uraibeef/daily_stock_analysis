@@ -27,11 +27,13 @@ BASE=$(git merge-base origin/main HEAD)
 echo "CURRENT_HEAD=$(git rev-parse HEAD)"
 echo "CURRENT_BASE=$BASE"
 echo "FILES_CHANGED=$(git diff --name-only --diff-filter=ACMRDTUXB \"$BASE\" HEAD | wc -l)"
-git diff --stat --numstat "$BASE" HEAD
+git diff --stat "$BASE" HEAD
+git diff --numstat "$BASE" HEAD
 git diff --name-only --diff-filter=ACMRDTUXB "$BASE" HEAD
 ```
 
 请在正文按输出结果顺序原样贴出，不得截断、不得复用旧值；若有追加 commit，需重复重算并覆盖旧数据。
+处理已有 PR 的 review 反馈时，修改本模板不会自动更新已打开 PR 的正文；必须同步编辑 PR 描述中的 Scope、文件清单、Head、验证结果和兼容性说明。
 
 请直接粘贴上述命令输出，不得截断。若 PR 在提交周期内有新增 commit，提交说明前必须重算并覆盖旧值（禁止沿用历史头信息）。
 请按受影响改动面说明本次影响范围（如 backend/web/api/docs/治理资产等），包含 governance 文件时请同步解释变更动机与影响面。
@@ -118,6 +120,7 @@ git diff --name-only --diff-filter=ACMRDTUXB "$BASE" HEAD
       - `.github/PULL_REQUEST_TEMPLATE.md`（PR 模板或说明文案）
       - `docs/architecture/api_spec.json`（文档级 API 示例地址）
       - `docs/full-guide*.md`（配置说明与展示文档）
+      - `.env` / `.env.example` 若不在本 PR diff 中，请明确写出扫描命中来自其他文本线索，并附 `git diff --name-only <base> HEAD -- .env .env.example` 为空的核验依据
       - `api_spec`、测试 mock、历史展示字段的快照/元数据定义
     - 若同一语句出现在模板、文档、测试、mock 或展示字段中，请在表中明确写明 `false-positive`，并说明为何不触发运行时迁移或 provider/model/base URL 加载链路。
   - 请确认命中源是否属于以下非运行时改动：仅模板文本、注释、测试、文档、单测 mock；若是 false positive 请在下方逐条列明“文件-命中文本-判定依据”。
