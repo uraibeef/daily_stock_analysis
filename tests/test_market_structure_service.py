@@ -170,6 +170,25 @@ class _BlockingRankingFetcherManager:
         return ([{"name": "机器人概念", "change_pct": 4.2}], [])
 
 
+class _RecoveringTimeoutRankingFetcherManager:
+    def __init__(self) -> None:
+        self.release_first_sector = threading.Event()
+        self.first_sector_started = threading.Event()
+        self.sector_calls = 0
+        self.concept_calls = 0
+
+    def get_sector_rankings(self, n: int = 5):
+        self.sector_calls += 1
+        if self.sector_calls == 1:
+            self.first_sector_started.set()
+            self.release_first_sector.wait()
+        return ([{"name": "通用设备", "change_pct": 2.1}], [])
+
+    def get_concept_rankings(self, n: int = 5):
+        self.concept_calls += 1
+        return ([{"name": "机器人概念", "change_pct": 4.2}], [])
+
+
 class _PermanentlyBlockingRankingFetcherManager:
     def __init__(self, *, block: bool) -> None:
         self.block = block
@@ -211,6 +230,11 @@ def _wait_for_market_hotspot_workers_to_drain(timeout: float = 0.5) -> bool:
                 for future in MarketHotspotService._ranking_fetch_futures.values()
                 if not future.done()
             ]
+            pending.extend(
+                future
+                for future in MarketHotspotService._ranking_fetch_detached_futures
+                if not future.done()
+            )
         if not pending:
             return True
         time.sleep(0.01)
@@ -309,6 +333,39 @@ def test_market_hotspot_service_does_not_stack_workers_after_timeout() -> None:
     assert fetcher.concept_calls == 1
     assert any("timeout" in error for error in first["data_quality"]["errors"])
     assert any("timeout" in error for error in second["data_quality"]["errors"])
+
+
+def test_market_hotspot_service_retries_after_ranking_timeout_cooldown() -> None:
+    fetcher = _RecoveringTimeoutRankingFetcherManager()
+    service = MarketHotspotService(
+        fetcher_manager=fetcher,
+        ranking_fetch_timeout_seconds=0.01,
+        failure_cache_ttl_seconds=0.0,
+    )
+    drained = False
+
+    try:
+        first = service.get_hotspots(market="cn", trade_date="2026-07-04")
+
+        assert first["status"] == "partial"
+        assert fetcher.first_sector_started.is_set()
+        assert fetcher.sector_calls == 1
+        assert any(
+            "sector_rankings" in error and "timeout" in error
+            for error in first["data_quality"]["errors"]
+        )
+
+        time.sleep(RANKING_FETCH_TIMEOUT_RETRY_DELAY_SECONDS + 0.05)
+        recovered = service.get_hotspots(market="cn", trade_date="2026-07-04")
+    finally:
+        fetcher.release_first_sector.set()
+        drained = _wait_for_market_hotspot_workers_to_drain()
+
+    assert drained
+    assert recovered["status"] == "ok"
+    assert recovered["leading_industries"][0]["name"] == "通用设备"
+    assert fetcher.sector_calls == 2
+    assert fetcher.concept_calls == 2
 
 
 def test_market_hotspot_service_keeps_permanent_timeouts_under_worker_cap() -> None:

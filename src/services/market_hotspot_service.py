@@ -14,7 +14,7 @@ import threading
 from concurrent.futures import Future, TimeoutError as FutureTimeoutError
 from datetime import date
 import time
-from typing import Any, Callable, Dict, Hashable, List, Optional, Tuple
+from typing import Any, Callable, Dict, Hashable, List, Optional, Set, Tuple
 
 from data_provider import DataFetcherManager
 
@@ -44,6 +44,7 @@ class MarketHotspotService:
 
     _ranking_fetch_slots = threading.BoundedSemaphore(RANKING_FETCH_MAX_WORKERS)
     _ranking_fetch_futures: Dict[Hashable, Future] = {}
+    _ranking_fetch_detached_futures: Set[Future] = set()
     _ranking_fetch_retry_after: Dict[Hashable, Tuple[Future, float]] = {}
     _ranking_fetch_futures_lock = threading.Lock()
 
@@ -468,14 +469,20 @@ class MarketHotspotService:
     @classmethod
     def _forget_ranking_fetch(cls, inflight_key: Hashable, future: Future) -> None:
         with cls._ranking_fetch_futures_lock:
+            should_release_slot = False
             if cls._ranking_fetch_futures.get(inflight_key) is future:
                 cls._ranking_fetch_futures.pop(inflight_key, None)
+                should_release_slot = True
+            elif future in cls._ranking_fetch_detached_futures:
+                cls._ranking_fetch_detached_futures.remove(future)
+                should_release_slot = True
+
+            retry_entry = cls._ranking_fetch_retry_after.get(inflight_key)
+            if retry_entry is not None and retry_entry[0] is future:
                 cls._ranking_fetch_retry_after.pop(inflight_key, None)
+
+            if should_release_slot:
                 cls._ranking_fetch_slots.release()
-            else:
-                retry_entry = cls._ranking_fetch_retry_after.get(inflight_key)
-                if retry_entry is not None and retry_entry[0] is future:
-                    cls._ranking_fetch_retry_after.pop(inflight_key, None)
 
     @classmethod
     def _mark_ranking_fetch_timeout(
@@ -487,6 +494,12 @@ class MarketHotspotService:
     ) -> None:
         with cls._ranking_fetch_futures_lock:
             if cls._ranking_fetch_futures.get(inflight_key) is future:
+                cls._ranking_fetch_futures.pop(inflight_key, None)
+                if future.done() or future.cancelled():
+                    cls._ranking_fetch_retry_after.pop(inflight_key, None)
+                    cls._ranking_fetch_slots.release()
+                    return
+                cls._ranking_fetch_detached_futures.add(future)
                 cls._ranking_fetch_retry_after[inflight_key] = (future, retry_after)
 
     @classmethod
