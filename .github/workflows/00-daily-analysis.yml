@@ -514,6 +514,15 @@ jobs:
             python main.py $FORCE_RUN_ARG
           fi
       
+      - name: Thai Discord digest
+        if: success()
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DISCORD_WEBHOOK_URL_TH: ${{ secrets.DISCORD_WEBHOOK_URL_TH }}
+          DIGEST_MODEL: ${{ vars.DIGEST_MODEL || 'gpt-5.5' }}
+        run: |
+          python scripts/thai_discord_digest.py
+
       - name: 上传分析报告
         uses: actions/upload-artifact@v6
         if: always()
