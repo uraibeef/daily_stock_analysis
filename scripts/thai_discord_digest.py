@@ -20,10 +20,12 @@ import json
 import os
 import sys
 import time
+import urllib.error
 import urllib.request
 
-DISCORD_CHAR_LIMIT = 1900  # keep headroom under Discord's hard 2000 limit
-MAX_REPORT_CHARS = 60000   # truncate huge inputs before sending to the LLM
+DISCORD_CHAR_LIMIT = 1900   # keep headroom under Discord's hard 2000 limit
+MAX_REPORT_CHARS = 24000    # keep input small enough for tight TPM rate limits
+RETRY_WAITS = (30, 60, 90)  # backoff seconds between 429 retries
 
 SYSTEM_PROMPT = """คุณคือผู้ช่วยสรุปรายงานวิเคราะห์หุ้นรายวันสำหรับนักเทรดชาวไทยชื่อ Beef
 
@@ -56,20 +58,21 @@ def latest(pattern: str) -> str | None:
 
 
 def read_reports(reports_dir: str) -> str:
+    # per-part caps so the (large) stock report can't crowd out the market review
     parts: list[str] = []
-    for name, pattern in (
-        ("MARKET REVIEW", os.path.join(reports_dir, "market_review_*.md")),
-        ("STOCK REPORT", os.path.join(reports_dir, "report_*.md")),
+    for name, pattern, cap in (
+        ("MARKET REVIEW", os.path.join(reports_dir, "market_review_*.md"), 4000),
+        ("STOCK REPORT", os.path.join(reports_dir, "report_*.md"), MAX_REPORT_CHARS - 4000),
     ):
         path = latest(pattern)
         if path:
             with open(path, "r", encoding="utf-8") as f:
-                parts.append(f"===== {name} ({os.path.basename(path)}) =====\n{f.read()}")
-    combined = "\n\n".join(parts)
-    return combined[:MAX_REPORT_CHARS]
+                body = f.read()[:cap]
+            parts.append(f"===== {name} ({os.path.basename(path)}) =====\n{body}")
+    return "\n\n".join(parts)
 
 
-def call_openai(api_key: str, model: str, report_text: str) -> str:
+def _chat_once(api_key: str, model: str, report_text: str) -> str:
     payload = {
         "model": model,
         "messages": [
@@ -94,6 +97,25 @@ def call_openai(api_key: str, model: str, report_text: str) -> str:
     if not content or not content.strip():
         raise RuntimeError(f"empty LLM response: {json.dumps(data)[:500]}")
     return content.strip()
+
+
+def call_openai(api_key: str, model: str, report_text: str) -> str:
+    """Call the model with 429 backoff; fall back to gpt-5.4-mini as a last resort."""
+    fallback_model = "gpt-5.4-mini"
+    for attempt, wait in enumerate((0,) + RETRY_WAITS):
+        if wait:
+            print(f"rate limited (429), retry in {wait}s...")
+            time.sleep(wait)
+        try:
+            return _chat_once(api_key, model, report_text)
+        except urllib.error.HTTPError as e:
+            if e.code != 429:
+                raise
+    if model != fallback_model:
+        print(f"still rate limited, falling back to {fallback_model}")
+        time.sleep(30)
+        return _chat_once(api_key, fallback_model, report_text)
+    raise RuntimeError("rate limited on all attempts")
 
 
 def split_chunks(text: str, limit: int = DISCORD_CHAR_LIMIT) -> list[str]:
