@@ -3,7 +3,8 @@ name: 每日股票分析
 on:
   # 定时触发 - 每天北京时间 18:00 (UTC 10:00)
   schedule:
-    - cron: '0 0 * * 2-6'      # Tue-Sat UTC 00:00 = Thai 07:00 (covers Mon-Fri US session)
+    - cron: '0 14 * * 1-5'     # Mon-Fri UTC 14:00 = Thai 21:00 (30min after US open, EDT)
+    - cron: '0 17 * * 1-5'     # Mon-Fri UTC 17:00 = Thai 00:00 (mid US session)
   
   # 手动触发
   workflow_dispatch:
